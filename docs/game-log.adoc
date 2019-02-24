@@ -1,0 +1,45 @@
+# Game Log
+
+- Should support multiple servers
+- Agent with basic web GUI
+- Server with database and rich GUI
+- Agent sends results to server
+  - Live?
+  - After game finished
+    - What happens on server shut down
+    - Only successfully finished games?
+- Track clients by there UUID
+  - Merge clients
+  - Make it possible to move game result to other client (in case somebody played on another PC)
+- GraphQL
+
+
+## Interessting Results
+
+- *PvP*: Show how often 2 plaxyers killed each other.
+  - Filter by time
+  - Filter teamkills
+  - Filter map
+  - Filter by cause
+- *Stats*: Show the result of the day
+  - By time (e.g. for daily stats)
+  - By map
+  - Without awards
+  - Which awards
+  - Kills
+     - by Weapon
+     - Teamkills
+  - Points per minute
+  - Kills per minute
+  - Death/Kill ratio
+
+## League Mode
+
+- Should support a league mode
+- Fixed teams + backup players
+- Flag games as team game
+- 
+
+## Dashboard
+
+- Customizable dashboard

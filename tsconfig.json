@@ -2,7 +2,11 @@
     "compilerOptions": {
         "outDir": "dist",
         "target": "es2017",
-        "module": "commonjs"
+        "module": "commonjs",
+        "noImplicitAny": true,
+        "strictNullChecks": true,
+        "emitDecoratorMetadata": true,
+        "experimentalDecorators": true
     },
     "include": [
         "**/*.ts"

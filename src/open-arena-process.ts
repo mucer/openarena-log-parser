@@ -1,33 +1,34 @@
 import { ChildProcess, spawn, SpawnOptions } from 'child_process';
 import { pathExists, writeFile } from 'fs-extra';
 import { join } from 'path';
-import { OpenArenaSettings } from './open-arena-settings';
+import { OpenArenaOptions } from './models/open-arena-options';
+import { GameType } from './models/constants';
 
 
-let i = 0;
-setInterval(() => console.log(++i), 5000);
+// let i = 0;
+// setInterval(() => console.log(++i), 5000);
 
 export class OpenArenaProcess {
-    gameMode = 'baseoa';
-    settingsCfgName = 'settings.cfg';
-    initCfgName = 'server1.cfg';
+    public gameMode = 'baseoa';
+    public settingsCfgName = 'settings.cfg';
+    public initCfgName = 'server1.cfg';
 
-    settings: OpenArenaSettings = {
+    public settings: OpenArenaOptions = {
         dedicated: 1
-    }
+    };
 
     private child: ChildProcess | undefined;
 
     constructor(private gameDir: string, private homeDir?: string) {
     }
 
-    async start() {
+    public async start() {
         const binFile = join(this.gameDir, this.getBinName());
         const initCfgFile = join(this.gameDir, this.gameMode, this.initCfgName);
         const settingsCfgFile = join(this.gameDir, this.gameMode, this.settingsCfgName);
 
         if (!await pathExists(binFile)) {
-            throw new Error(`OpenArena binary '${initCfgFile}' does not exist!`);
+            throw new Error(`OpenArena binary '${binFile}' does not exist!`);
         }
         if (!await pathExists(initCfgFile)) {
             throw new Error(`initial configuration file '${initCfgFile}' not found`);
@@ -39,8 +40,7 @@ export class OpenArenaProcess {
 
         // build options
         const opts: SpawnOptions = {
-            cwd: this.gameDir,
-            shell: true
+            cwd: this.gameDir
         };
         // build args
         const args: string[] = [];
@@ -75,16 +75,15 @@ export class OpenArenaProcess {
         next();
     }
 
-    send(command: string) {
+    public send(command: string) {
         this.child && this.child.stdin.write(command);
     }
 
     private spawn(binFile: string, args: string[], opts: SpawnOptions): ChildProcess {
         const p = spawn(binFile, args, opts);
 
-        // p.stderr.setEncoding('utf8');
-
-        // p.stdout.on('data', data => console.log(`stdout: ${data.length}`));
+        p.stderr.setEncoding('utf8');
+        p.stdout.on('data', data => console.log(`stdout: ${data.length}`));
         p.stderr.on('data', data => console.log(data.toString()));
         p.on('close', (code) => console.log(`OpenArena exited with code ${code}`));
 
@@ -108,8 +107,8 @@ export class OpenArenaProcess {
 
     private getSettingsString(): string {
         return Object.keys(this.settings)
-            .filter(n => this.settings[n])
-            .map(n => `set ${n} "${this.settings[n]}"`)
+            .filter(n => (this.settings as any)[n])
+            .map(n => `set ${n} "${(this.settings as any)[n]}"`)
             .join('\n');
     }
 }

@@ -4,16 +4,32 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "lint": "tslint -p tsconfig.json -c tslint.json",
+    "lint:fix": "tslint -p tsconfig.json -c tslint.json --fix",
+    "test": "ts-mocha src/**/*.spec.ts",
+    "test:watch": "ts-mocha --watch --watch-extensions ts src/**/*.spec.ts"
   },
-  "author": "",
+  "author": {
+    "name": "Daniel Leib",
+    "email": "mucer@mailbox.org"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:mucer/openarena-node-process.git"
+  },
   "license": "ISC",
   "devDependencies": {
+    "@types/expect": "^1.20.4",
     "@types/fs-extra": "^5.0.4",
+    "@types/mocha": "^5.2.6",
     "@types/node": "^10.12.15",
+    "mocha": "^6.0.1",
+    "tslint": "^5.12.1",
     "typescript": "^3.2.2"
   },
   "dependencies": {
-    "fs-extra": "^7.0.1"
+    "expect": "^24.1.0",
+    "fs-extra": "^7.0.1",
+    "ts-mocha": "^6.0.0"
   }
 }

@@ -1,0 +1,23 @@
+interface Client {
+    id: string
+    name: string
+}
+
+interface Kill {
+    from: Client
+    to: Client
+    cause: MeanOfDeath
+}
+
+interface Join {
+    startTime: number;
+    endTime?: number;
+    client: Client;
+    team: number;
+    awards: Award[];
+}
+
+interface Game {
+    kills: Kill[]
+    joins: Join[];
+}
