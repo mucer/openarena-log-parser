@@ -1,14 +1,82 @@
 import { Client as PgClient, QueryResult } from "pg";
 import { Game } from "../models/game";
 import { ClientOptions } from "../models/client-options";
+import { GameType } from "../models/constants";
 
 const BOT_PATTERN = /^BOT\d+$/;
 function isBot(clientId: string): boolean {
     return BOT_PATTERN.test(clientId);
 }
 
+export interface PersonDto {
+    id: number;
+    name: string;
+    fullName: string | null;
+}
+
+export interface ClientDto {
+    id: number;
+    hwId: string;
+    personId: number | null;
+    personName: string | null;
+    names: { name: string, count: number }[];
+}
+
+export interface GameDto {
+    id: number;
+    map: string;
+    type: GameType;
+    startTime: Date;
+}
+
 export class GameDao {
     constructor(private pg: PgClient) {
+    }
+
+    public async getGames(): Promise<GameDto[]> {
+        const result = await this.pg.query('SELECT id, map, type, start_time FROM game');
+
+        return result.rows.map(r => ({
+            id: r.id,
+            map: r.map,
+            type: r.type,
+            startTime: r.start_time
+        }));
+    }
+
+    public async getPersons(): Promise<PersonDto[]> {
+        const result = await this.pg.query('SELECT id, name, full_name FROM person');
+
+        return result.rows.map(r => ({
+            id: r.id,
+            name: r.name,
+            fullName: r.full_name
+        }));
+    }
+
+    public async getClients(): Promise<ClientDto[]> {
+        const result = await this.pg.query(
+            'SELECT c.id, c.hw_id, c.person_id, (SELECT p.name FROM person p WHERE p.id = c.person_id) as person_name FROM client c');
+        const clients: ClientDto[] = [];
+        for (const row of result.rows) {
+            const id: number = row.id;
+
+            const namesResult = await this.pg.query(
+                'SELECT name, count(*) num FROM game_join WHERE client_id = $1 GROUP BY name ORDER BY 2 DESC',
+                [id]);
+
+            clients.push({
+                id,
+                hwId: row.hw_id,
+                personId: row.person_id,
+                personName: row.person_name,
+                names: namesResult.rows.map(r => ({
+                    name: r.name,
+                    count: r.num
+                }))
+            });
+        }
+        return clients;
     }
 
     public async writeGame(game: Game) {
@@ -36,7 +104,7 @@ export class GameDao {
                     throw new Error(`no intern ID for hardware ID '${hwId}' found!`);
                 }
                 return id;
-            }
+            };
 
             for (const join of game.joins) {
                 if (isBot(join.clientId)) {

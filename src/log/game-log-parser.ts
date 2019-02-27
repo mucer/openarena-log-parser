@@ -130,7 +130,9 @@ export class GameLogParser {
                 throw new Error(`Invalid client data string '${data}' given!`);
             }
             const pos = +match[1];
-            const client: ClientOptions = this.current.clients[pos] = Object.assign(this.current.clients[pos] || {}, this.clientOptionParser.parse(match[2]));
+            const client: ClientOptions = this.current.clients[pos] = Object.assign(
+                this.current.clients[pos] || {},
+                this.clientOptionParser.parse(match[2]));
             // generate id for bots
             if (!client.id) {
                 client.id = `BOT${++this.nextBotId}`;
@@ -202,7 +204,7 @@ export class GameLogParser {
                     time,
                     fromId,
                     toId: to.id,
-                    teamKill:  to.team !== Team.FREE && fromTeam === to.team,
+                    teamKill: to.team !== Team.FREE && fromTeam === to.team,
                     cause
                 });
             }
