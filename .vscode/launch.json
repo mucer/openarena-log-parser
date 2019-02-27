@@ -8,7 +8,7 @@
             "type": "node",
             "request": "launch",
             "name": "Launch Test",
-            "program": "${workspaceFolder}\\dist\\test-log.js",
+            "program": "${workspaceFolder}\\dist\\tests\\calc-stats.js",
             "preLaunchTask": "tsc: build - tsconfig.json",
             "outFiles": [
                 "${workspaceFolder}/dist/**/*.js"

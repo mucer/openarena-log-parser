@@ -1,24 +1,31 @@
 import { ClientOptions } from "../models/client-options";
-import { MeanOfDeath, TEAM_GAME_TYPES, Team } from "../models/constants";
-import { GameOptions } from "../models/game-options";
-import { GameStats, Result } from "./game-stats";
+import { AwardType, MeanOfDeath, Team, TEAM_GAME_TYPES } from "../models/constants";
+import { Game } from "../models/game";
+import { GameResult } from "../models/game-result";
+import { Join } from "../models/join";
+import { ClientOptionsParser } from "./client-option-parser";
+import { GameOptionsParser } from "./game-options-parser";
 
 const LOG_TIME_PATTERN = /^\s*(\d+):(\d+) (.*)/;
 
 export class GameLogParser {
-    private games: GameStats[] = [];
+    private nextBotId = 0;
 
-    private current: GameStats | undefined;
+    private games: Game[] = [];
+
+    private current: Game | undefined;
 
     private ignoredLines: string[] = [];
 
     private waiting: ((line: string) => void)[] = [];
 
+    private clientOptionParser = new ClientOptionsParser();
+
     public parse(...lines: string[]) {
         lines.forEach(line => line && line.split('\n').forEach(l => this.parseLine(l)));
     }
 
-    public getCurrent(): GameStats | undefined {
+    public getCurrent(): Game | undefined {
         return this.current;
     }
 
@@ -26,7 +33,7 @@ export class GameLogParser {
         return this.ignoredLines;
     }
 
-    public getGames(): GameStats[] {
+    public getGames(): Game[] {
         return this.games;
     }
 
@@ -41,7 +48,7 @@ export class GameLogParser {
             time = (+match[1] * 60) + (+match[2]);
             line = match[3];
         } else if (this.current) {
-            time = new Date().getTime() - this.current.getStartTime();
+            time = new Date().getTime() - this.current.startTime;
         }
 
         if (this.waiting.length) {
@@ -66,10 +73,10 @@ export class GameLogParser {
                 this.shutdownGame();
                 break;
             case 'ClientUserinfoChanged':
-                this.updateClient(data);
+                this.updateClient(time, data);
                 break;
             case 'ClientDisconnect':
-                this.removeClient(data);
+                this.removeClient(time, data);
                 break;
             case 'Kill':
                 this.addKill(time, data);
@@ -105,21 +112,38 @@ export class GameLogParser {
         if (this.current) {
             console.warn('Last game not terminated correctly');
         }
-        this.current = new GameStats(new GameOptions(data));
-
-        // console.log(`New game: startTime=${this.startTime}, map=${this.options.mapname}, type=${GameType[this.options.g_gametype]}`);
+        this.current = {
+            options: new GameOptionsParser().parse(data),
+            clients: [],
+            awards: [],
+            kills: [],
+            joins: [],
+            score: {},
+            startTime: new Date().getTime()
+        };
     }
 
-    private updateClient(data: string) {
+    private updateClient(time: number, data: string) {
         if (this.current) {
             const match = data.match(/(\d+) (.*)/);
             if (!match) {
                 throw new Error(`Invalid client data string '${data}' given!`);
             }
             const pos = +match[1];
-            const options = new ClientOptions(match[2]);
-            this.current.updateClient(pos, options);
-            // console.log(`client: id=${id}, name=${options.n}, team=${Team[options.t]}`);
+            const client: ClientOptions = this.current.clients[pos] = Object.assign(this.current.clients[pos] || {}, this.clientOptionParser.parse(match[2]));
+            // generate id for bots
+            if (!client.id) {
+                client.id = `BOT${++this.nextBotId}`;
+            } else {
+                const join: Join | undefined = this.current.joins.find(j => j.clientId === client.id && j.endTime === undefined);
+                if (join && (join.name !== client.name || join.team !== client.team)) {
+                    join.endTime = time;
+                }
+                if (client.team !== Team.SPECTATOR) {
+                    this.current.joins.push({ clientId: client.id, name: client.name, team: client.team, startTime: time });
+                }
+            }
+
         }
     }
 
@@ -129,31 +153,59 @@ export class GameLogParser {
             if (!match) {
                 throw new Error(`Invalid player score '${data}' given!`);
             }
-            const id = +match[1];
+            const pos = +match[1];
             const score = +match[2];
-            this.current.updateScore(id, score);
-            // console.log(`score: pos=${pos}, id=${this.clients[pos].id} name=${this.clients[pos].n}, score=${score}`);
+            const client = this.current.clients[pos];
+            if (client) {
+                this.current.score[client.id] = score;
+            }
         }
     }
 
-    private removeClient(data: string) {
+    private removeClient(time: number, data: string) {
         if (this.current) {
-            this.current.removeClient(+data);
+            const client = this.current.clients[+data];
+            if (client) {
+                this.current.clients[+data] = undefined;
+                this.current.joins.filter(j => j.clientId === client.id && j.endTime === undefined).forEach(j => j.endTime = time);
+            }
         }
     }
 
     private addKill(time: number, data: string) {
         if (this.current) {
-            console.log(data);
             const match = data.match(/(\d+) (\d+) (\d+)/);
             if (!match) {
                 throw new Error(`Invalid kill format given: ${data}`);
             }
 
-            const from = +match[1];
-            const to = +match[2];
+            const fromPos = +match[1];
+            const toPos = +match[2];
             const cause: MeanOfDeath = +match[3];
-            this.current.addKill(time, from, to, cause);
+
+
+            let fromId: string | undefined;
+            let fromTeam = -1;
+            if (fromPos === 1022) {
+                fromId = '<world>';
+            } else {
+                const from = this.current.clients[fromPos];
+                if (from) {
+                    fromId = from ? from.id : undefined;
+                    fromTeam = from.team;
+                }
+            }
+            const to = this.current.clients[toPos];
+            if (fromId && to) {
+
+                this.current.kills.push({
+                    time,
+                    fromId,
+                    toId: to.id,
+                    teamKill:  to.team !== Team.FREE && fromTeam === to.team,
+                    cause
+                });
+            }
         }
     }
 
@@ -193,20 +245,23 @@ export class GameLogParser {
             }
 
             const pos = +match[1];
-            const award = +match[2];
-            this.current.addAward(time, pos, award);
+            const type = +match[2] as AwardType;
+
+            const client = this.current.clients[pos];
+            if (client) {
+                this.current.awards.push({ time, clientId: client.id, type });
+            }
         }
     }
 
     private parseResult(time: number, reason: string) {
         if (this.current) {
-            const stats: GameStats = this.current;
-            const result: Result = {
+            const stats: Game = this.current;
+            const result: GameResult = stats.result = {
                 time,
                 reason,
                 clients: []
             };
-            stats.setResult(result);
             this.games.push(stats);
             if (TEAM_GAME_TYPES.includes(+stats.options.gameType)) {
                 this.waiting.push(teamResult => {
@@ -219,11 +274,13 @@ export class GameLogParser {
                 });
             }
 
-            for (let i = 0; i < this.current.getClients().length; i++) {
+            stats.joins.filter(j => !j.endTime).forEach(j => j.endTime = time);
+
+            for (let i = 0; i < stats.clients.length; i++) {
                 this.waiting.push(line => {
                     const match = line.match(/score: (\d+)  ping: (\d+)  client: (\d+)/);
                     if (match) {
-                        const client = stats.getClient(+match[3]);
+                        const client = stats.clients[+match[3]];
                         if (client) {
                             result.clients.push({ id: client.id, name: client.name, score: +match[1] });
                         }

@@ -1,1 +1,0 @@
-Start-Process -FilePath "oa_ded.exe" -WorkingDirectory "D:\Spiele\openarena-0.8.8" -ArgumentList "+exec", "settings.cfg", "+exec", "server1.cfg"

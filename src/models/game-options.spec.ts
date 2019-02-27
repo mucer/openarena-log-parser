@@ -1,4 +1,3 @@
-
 const OPTIONS = '\\dmflags\\512'
     + '\\fraglimit\\50'
     + '\\timelimit\\20'

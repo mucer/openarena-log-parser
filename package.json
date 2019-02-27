@@ -23,6 +23,7 @@
     "@types/fs-extra": "^5.0.4",
     "@types/mocha": "^5.2.6",
     "@types/node": "^10.12.15",
+    "@types/pg": "^7.4.13",
     "mocha": "^6.0.1",
     "tslint": "^5.12.1",
     "typescript": "^3.2.2"
@@ -30,6 +31,7 @@
   "dependencies": {
     "expect": "^24.1.0",
     "fs-extra": "^7.0.1",
+    "pg": "^7.8.1",
     "ts-mocha": "^6.0.0"
   }
 }

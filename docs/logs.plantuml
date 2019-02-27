@@ -1,6 +1,10 @@
+interface User {
+    name: string
+    clientIds: string[]
+}
+
 interface Client {
     id: string
-    name: string
 }
 
 interface Kill {
@@ -10,14 +14,15 @@ interface Kill {
 }
 
 interface Join {
-    startTime: number;
-    endTime?: number;
-    client: Client;
-    team: number;
-    awards: Award[];
+    startTime: number
+    endTime?: number
+    client: Client
+    team: number
+    name: string
 }
 
 interface Game {
     kills: Kill[]
-    joins: Join[];
+    joins: Join[]
+    awards: Award[]
 }

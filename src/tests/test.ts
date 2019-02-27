@@ -1,4 +1,4 @@
-import { OpenArenaProcess } from './open-arena-process';
+import { OpenArenaProcess } from '../process/open-arena-process';
 
 const p = new OpenArenaProcess('/opt/openarena-0.8.8');
 p.settings.svHostname = process.env.OA_NAME;

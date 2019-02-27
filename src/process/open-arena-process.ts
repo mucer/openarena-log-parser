@@ -1,12 +1,7 @@
 import { ChildProcess, spawn, SpawnOptions } from 'child_process';
 import { pathExists, writeFile } from 'fs-extra';
 import { join } from 'path';
-import { OpenArenaOptions } from './models/open-arena-options';
-import { GameType } from './models/constants';
-
-
-// let i = 0;
-// setInterval(() => console.log(++i), 5000);
+import { OpenArenaOptions } from '../models/open-arena-options';
 
 export class OpenArenaProcess {
     public gameMode = 'baseoa';
@@ -57,8 +52,6 @@ export class OpenArenaProcess {
             '+exec', this.settingsCfgName,
             '+exec', this.initCfgName
         );
-
-        console.log(binFile + ' ' + args.join(' '));
 
         let tries = 0;
         const next = () => {
