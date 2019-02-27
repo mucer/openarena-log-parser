@@ -5,16 +5,16 @@ CREATE TABLE game (
     type SMALLINT NOT NULL
 );
 
-CREATE TABLE user {
+CREATE TABLE person (
     id SERIAL PRIMARY KEY,
     name VARCHAR(32) NOT NULL,
     full_name VARCHAR(128)
-}
+);
 
 CREATE TABLE client (
     id SERIAL PRIMARY KEY,
     hw_id CHAR(32) NOT NULL,
-    user_id INT
+    person_id INT
 );
 
 INSERT INTO client (id, hw_id) VALUES

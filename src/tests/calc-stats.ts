@@ -2,10 +2,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { Client } from "pg";
 import { GameDao } from "../db/game-dao";
-import { Game } from "../models/game";
 import { GameLogParser } from "../log/game-log-parser";
-
-const games: Game[] = JSON.parse(readFileSync(join(__dirname, '../../logs/games.json'), 'utf8'));
 
 const client = new Client({
     user: 'postgres',
