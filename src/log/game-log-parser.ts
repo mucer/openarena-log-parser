@@ -137,11 +137,12 @@ export class GameLogParser {
             if (!client.id) {
                 client.id = `BOT${++this.nextBotId}`;
             } else {
-                const join: Join | undefined = this.current.joins.find(j => j.clientId === client.id && j.endTime === undefined);
+                let join: Join | undefined = this.current.joins.find(j => j.clientId === client.id && j.endTime === undefined);
                 if (join && (join.name !== client.name || join.team !== client.team)) {
                     join.endTime = time;
+                    join = undefined;
                 }
-                if (client.team !== Team.SPECTATOR) {
+                if (!join && client.team !== Team.SPECTATOR) {
                     this.current.joins.push({ clientId: client.id, name: client.name, team: client.team, startTime: time });
                 }
             }
