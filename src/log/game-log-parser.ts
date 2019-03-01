@@ -15,11 +15,11 @@ export class GameLogParser {
 
     private current: Game | undefined;
 
-    private ignoredLines: string[] = [];
-
-    private waiting: ((line: string) => void)[] = [];
+    private waiting: ((line: string, time: number) => void)[] = [];
 
     private clientOptionParser = new ClientOptionsParser();
+
+    private ignoredCommands: string[] = [];
 
     public parse(...lines: string[]) {
         lines.forEach(line => line && line.split('\n').forEach(l => this.parseLine(l)));
@@ -29,88 +29,110 @@ export class GameLogParser {
         return this.current;
     }
 
-    public getIgnoredLines(): string[] {
-        return this.ignoredLines;
-    }
-
     public getGames(): Game[] {
         return this.games;
     }
 
-    private parseLine(line: string) {
-        if (line.startsWith('--')) {
-            return;
-        }
+    public getIgnoredCommands(): string[] {
+        return this.ignoredCommands;
+    }
 
-        const match = LOG_TIME_PATTERN.exec(line);
-        let time = 0;
-        if (match) {
-            time = (+match[1] * 60) + (+match[2]);
-            line = match[3];
-        } else if (this.current) {
-            time = new Date().getTime() - this.current.startTime;
-        }
+    private parseLine(line: string, time?: number) {
+        try {
+            if (line.startsWith('--')) {
+                return;
+            }
 
-        if (this.waiting.length) {
-            const fn = this.waiting.shift();
-            fn && fn(line);
-            return;
-        }
+            if (time === undefined) {
+                const match = LOG_TIME_PATTERN.exec(line);
+                if (match) {
+                    time = (+match[1] * 60) + (+match[2]);
+                    line = match[3];
+                } else if (this.current) {
+                    time = new Date().getTime() - this.current.startTime;
+                } else {
+                    time = 0;
+                }
+            }
 
-        const pos = line.indexOf(':');
-        if (pos === -1) {
-            this.ignoredLines.push(line);
-            return;
-        }
+            if (this.waiting.length) {
+                const fn = this.waiting.shift();
+                fn && fn(line, time);
+                return;
+            }
 
-        const key = line.substr(0, pos);
-        const data = line.substr(pos + 2);
-        switch (key) {
-            case 'InitGame':
-                this.initGame(data);
-                break;
-            case 'ShutdownGame':
-                this.shutdownGame();
-                break;
-            case 'ClientUserinfoChanged':
-                this.updateClient(time, data);
-                break;
-            case 'ClientDisconnect':
-                this.removeClient(time, data);
-                break;
-            case 'Kill':
-                this.addKill(time, data);
-                break;
-            case 'Award':
-                this.parseAward(time, data);
-                break;
-            case 'PlayerScore':
-                this.updatePlayerScore(data);
-                break;
-            case 'Exit':
-                this.parseResult(time, data);
-                break;
-            case 'CTF':
-                this.parseCtf(data);
-                break;
-            case 'Item':
-            case 'broadcast':
-            case 'tell':
-            case 'sayteam':
-            case 'ClientConnect':
-            case 'ClientBegin':
-            case 'Playerstore':
-            case 'Award':
-            case 'say':
-                break;
-            default:
-                this.ignoredLines.push(line);
+            const pos = line.indexOf(':');
+            if (pos === -1) {
+                return;
+            }
+
+            const key = line.substr(0, pos);
+            const data = line.substr(pos + 1).trim();
+            if (/^\w+$/.test(key)) {
+                switch (key.toLowerCase()) {
+                    case 'initgame':
+                        this.initGame(data);
+                        break;
+                    case 'shutdowngame':
+                        this.shutdownGame();
+                        break;
+                    case 'clientuserinfochanged':
+                        this.updateClient(time, data);
+                        break;
+                    case 'clientdisconnect':
+                        this.removeClient(time, data);
+                        break;
+                    case 'kill':
+                        this.addKill(time, data);
+                        break;
+                    case 'award':
+                        this.parseAward(time, data);
+                        break;
+                    case 'score':
+                        this.parseScore(data);
+                        break;
+                    case 'red':
+                        this.parseTeamScore(data);
+                        break;
+                    case 'exit':
+                        this.parseResult(time, data);
+                        break;
+                    case 'ctf':
+                        this.parseCtf(data);
+                        break;
+                    case 'info':
+                    case 'clientconnect':
+                    case 'clientbegin':
+                    case 'playerstore':
+                    case 'item': // player picked up an item
+                    case 'dom': // events for gametype dominiation
+                    case 'dd': // events for gametype double dominiation
+                    case 'harvester': // events for gametype harvester
+                    case '1fctf': // events for gametype one capture the flag
+                    case 'obelisk': // events for gametype obelisk
+                    case 'challenge': // challenges contain mostly redundant data
+                    case 'say': // chat message to all
+                    case 'sayteam': // chat message to team
+                    case 'tell': // chat message to other player
+                    case 'playerscore': // when a player got a point
+                    case 'teamscore': // when a team got a point
+                    case 'warmup': // no further information
+                        break;
+                    default:
+                        if (!this.ignoredCommands.includes(key)) {
+                            this.ignoredCommands.push(key);
+                        }
+                }
+            }
+        } catch (e) {
+            throw new Error(`Error parsing line '${line}: ${e}`);
         }
     }
 
     private initGame(data: string) {
         if (this.current) {
-            console.warn('Last game not terminated correctly');
+            console.warn(
+                `Last game not terminated correctly (time=${this.current.options.timestamp}, map=${this.current.options.mapName})`);
         }
         this.current = {
             options: new GameOptionsParser().parse(data),
@@ -118,7 +140,6 @@ export class GameLogParser {
             awards: [],
             kills: [],
             joins: [],
-            score: {},
             startTime: new Date().getTime()
         };
     }
@@ -150,18 +171,29 @@ export class GameLogParser {
         }
     }
 
-    private updatePlayerScore(data: string) {
-        if (this.current) {
-            const match = data.match(/(\d+) (-?\d+)/);
+    private parseScore(data: string) {
+        if (this.current && this.current.result) {
+            const match = data.match(/(\d+)  ping: \d+  client: (\d+)/);
             if (!match) {
-                throw new Error(`Invalid player score '${data}' given!`);
+                throw new Error(`Invalid score '${data}' given!`);
             }
-            const pos = +match[1];
-            const score = +match[2];
+            const pos = +match[2];
+            const score = +match[1];
             const client = this.current.clients[pos];
             if (client) {
-                this.current.score[client.id] = score;
+                this.current.result.score[client.id] = score;
             }
+        }
+    }
+
+    private parseTeamScore(data: string) {
+        if (this.current && this.current.result) {
+            const match = data.match(/(\d+)  blue:(\d+)/);
+            if (!match) {
+                throw new Error(`Invalid team score '${data}' given!`);
+            }
+            this.current.result.red = +match[1];
+            this.current.result.blue = +match[2];
         }
     }
 
@@ -263,35 +295,11 @@ export class GameLogParser {
             const result: GameResult = stats.result = {
                 time,
                 reason,
-                clients: []
+                score: {}
             };
             this.games.push(stats);
-            if (TEAM_GAME_TYPES.includes(+stats.options.gameType)) {
-                this.waiting.push(teamResult => {
-                    const match = teamResult.match(/red:(\d+)  blue:(\d+)/);
-                    if (!match) {
-                        throw new Error(`Team result expected, got: ` + teamResult);
-                    }
-                    result.red = +match[1];
-                    result.blue = +match[2];
-                });
-            }
 
             stats.joins.filter(j => !j.endTime).forEach(j => j.endTime = time);
-
-            for (let i = 0; i < stats.clients.length; i++) {
-                this.waiting.push(line => {
-                    const match = line.match(/score: (\d+)  ping: (\d+)  client: (\d+)/);
-                    if (match) {
-                        const client = stats.clients[+match[3]];
-                        if (client) {
-                            result.clients.push({ id: client.id, name: client.name, score: +match[1] });
-                        }
-                    } else {
-                        this.parseLine(line);
-                    }
-                });
-            }
         }
     }
 

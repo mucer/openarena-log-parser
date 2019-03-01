@@ -1,22 +1,29 @@
-import { readFileSync } from "fs";
-import { join } from "path";
-import { Client as PgClient } from "pg";
-import { GameDao } from "../db/game-dao";
-import { GameLogParser } from "../log/game-log-parser";
+import { Pool } from "pg";
+import { StatsDao } from "../db/stats-dao";
 
-const pg = new PgClient({
-    user: 'postgres',
-    host: 'localhost',
-    database: 'postgres',
-    password: 'test',
-    port: 5432
-});
-pg.connect();
+(async () => {
+    const pool = new Pool({
+        user: 'postgres',
+        host: 'localhost',
+        database: 'postgres',
+        password: 'test',
+        port: 5432
+    });
 
-const dao = new GameDao(pg);
+    try {
 
-dao.getClients().then(clients => {
-    console.log(JSON.stringify(clients, undefined, 2));
+        // test connection
+        console.info('Testing database connection');
+        const client = await pool.connect();
+        client.release();
 
-    pg.end();
-});
+        const dao = new StatsDao(pool);
+        const clients = await dao.getClients();
+        
+        console.log(JSON.stringify(clients, undefined, 2));
+    } catch (e) {
+        console.error(e);
+    } finally {
+        pool.end();
+    }
+})();

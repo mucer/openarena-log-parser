@@ -21,7 +21,7 @@ describe('GameLogParser', () => {
 
         // then
         expect(parser.getCurrent()).not.toBeDefined();
-        expect(parser.getIgnoredLines().length).toBe(0);
+        expect(parser.getIgnoredCommands()).toEqual([]);
     });
 
     it('should ignore empty lines and comments', () => {
@@ -32,10 +32,21 @@ describe('GameLogParser', () => {
 
         // then
         expect(parser.getCurrent()).toBeUndefined();
-        expect(parser.getIgnoredLines().length).toBe(0);
+        expect(parser.getIgnoredCommands()).toEqual([]);
     });
 
-    it('should log ignored lines', () => {
+    it('should log ignored commands (once)', () => {
+        // given
+
+        // when
+        parser.parse('MYCMD: asdf', 'MYCMD2: asdf', 'MYCMD: asdf');
+
+        // then
+        expect(parser.getCurrent()).toBeUndefined();
+        expect(parser.getIgnoredCommands()).toEqual(['MYCMD', 'MYCMD2']);
+    });
+
+    it('should ignored invalid lines', () => {
         // given
 
         // when
@@ -43,7 +54,7 @@ describe('GameLogParser', () => {
 
         // then
         expect(parser.getCurrent()).toBeUndefined();
-        expect(parser.getIgnoredLines()).toEqual(['a', 'b']);
+        expect(parser.getIgnoredCommands()).toEqual([]);
     });
 
     describe('with running game', () => {
@@ -194,14 +205,6 @@ describe('GameLogParser', () => {
                 expect(award.type).toBe(AwardType.CAPTURE);
             });
 
-            it('should set player score', () => {
-                // when
-                parser.parse('PlayerScore: 0 5: Name1 now has 5 points');
-
-                // then
-                expect(current.score['A']).toBe(5);
-            });
-
             it('should exit', () => {
                 // when
                 parser.parse('Exit: Capturelimit hit.',
@@ -212,7 +215,7 @@ describe('GameLogParser', () => {
                 const result = current.result as GameResult;
                 expect(result).toBeDefined();
                 expect(result.reason).toBe('Capturelimit hit.');
-                expect(result.clients).toEqual([{ id: 'A', name: 'Name1', score: 15 }]);
+                expect(result.score).toEqual({ A: 15 });
                 expect(result.red).toBe(0);
                 expect(result.blue).toBe(3);
             });

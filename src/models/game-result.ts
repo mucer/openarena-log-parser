@@ -1,7 +1,9 @@
+import { Dictionary } from "./dictionary";
+
 export interface GameResult {
     time: number;
     reason: string;
-    clients: { id: string, name: string, score: number }[];
+    score: Dictionary<number>;
     red?: number;
     blue?: number;
 }

@@ -13,8 +13,6 @@ export interface Game {
 
     startTime: number;
 
-    score: Dictionary<number>;
-
     kills: Kill[];
 
     awards: Award[];

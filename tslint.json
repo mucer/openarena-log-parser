@@ -1,6 +1,9 @@
 {
     "lintOptions": {
-        "typeCheck": true
+        "typeCheck": true,
+        "exclude": [
+            "node_modules/**"
+        ]
     },
     "rules": {
         "cyclomatic-complexity": false,
