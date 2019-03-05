@@ -1,5 +1,5 @@
 import { ClientOptions } from "../models/client-options";
-import { AwardType, GameType, MeanOfDeath } from "../models/constants";
+import { AwardType, GameType, MeanOfDeath, ChallengeType } from "../models/constants";
 import { GameLogParser } from "./game-log-parser";
 import expect = require("expect");
 import { Game } from "../models/game";
@@ -203,6 +203,17 @@ describe('GameLogParser', () => {
                 const award: Award = current.awards[0];
                 expect(award.clientId).toBe('A');
                 expect(award.type).toBe(AwardType.CAPTURE);
+            });
+
+            it('should add challenge', () => {
+                // when
+                parser.parse('Challenge: 0 205 1: Client 5 got award 205');
+
+                // then
+                expect(current.challenges.length).toBe(1);
+                const challenge = current.challenges[0];
+                expect(challenge.clientId).toBe('A');
+                expect(challenge.type).toBe(ChallengeType.WEAPON_ROCKET_KILLS);
             });
 
             it('should exit', () => {

@@ -73,6 +73,19 @@ export class LogParserDao {
                 );
             }
 
+            // write challenges
+            for (const challenge of game.challenges) {
+                if (isBot(challenge.clientId)) {
+                    continue;
+                }
+
+                await conn.query(
+                    'INSERT INTO challenge (game_id, time, client_id, type) ' +
+                    'VALUES ($1, $2, $3, $4)',
+                    [gameId, challenge.time, toIntern(challenge.clientId), challenge.type]
+                );
+            }
+
             // write kills
             for (const kill of game.kills) {
                 await conn.query(

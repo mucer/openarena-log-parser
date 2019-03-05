@@ -1,5 +1,5 @@
 import { ClientOptions } from "../models/client-options";
-import { AwardType, MeanOfDeath, Team, TEAM_GAME_TYPES } from "../models/constants";
+import { AwardType, MeanOfDeath, Team, TEAM_GAME_TYPES, ChallengeType } from "../models/constants";
 import { Game } from "../models/game";
 import { GameResult } from "../models/game-result";
 import { Join } from "../models/join";
@@ -88,6 +88,9 @@ export class GameLogParser {
                     case 'award':
                         this.parseAward(time, data);
                         break;
+                    case 'challenge':
+                        this.parseChallenge(time, data);
+                        break;
                     case 'score':
                         this.parseScore(data);
                         break;
@@ -110,7 +113,6 @@ export class GameLogParser {
                     case 'harvester': // events for gametype harvester
                     case '1fctf': // events for gametype one capture the flag
                     case 'obelisk': // events for gametype obelisk
-                    case 'challenge': // challenges contain mostly redundant data
                     case 'say': // chat message to all
                     case 'sayteam': // chat message to team
                     case 'tell': // chat message to other player
@@ -140,6 +142,7 @@ export class GameLogParser {
             awards: [],
             kills: [],
             joins: [],
+            challenges: [],
             startTime: new Date().getTime()
         };
     }
@@ -285,6 +288,23 @@ export class GameLogParser {
             const client = this.current.clients[pos];
             if (client) {
                 this.current.awards.push({ time, clientId: client.id, type });
+            }
+        }
+    }
+
+    private parseChallenge(time: number, data: string) {
+        if (this.current) {
+            const match = data.match(/(\d+) (\d+)/);
+            if (!match) {
+                throw new Error(`Invalid Award format given: ${data}`);
+            }
+
+            const pos = +match[1];
+            const type = +match[2] as ChallengeType;
+
+            const client = this.current.clients[pos];
+            if (client) {
+                this.current.challenges.push({ time, clientId: client.id, type });
             }
         }
     }

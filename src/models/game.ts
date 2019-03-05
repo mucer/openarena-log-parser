@@ -5,6 +5,7 @@ import { GameOptions } from "./game-options";
 import { GameResult } from "./game-result";
 import { Join } from "./join";
 import { Kill } from "./kill";
+import { Challenge } from "./challenge";
 
 export interface Game {
     options: GameOptions;
@@ -16,6 +17,8 @@ export interface Game {
     kills: Kill[];
 
     awards: Award[];
+
+    challenges: Challenge[];
 
     joins: Join[];
 

@@ -113,7 +113,7 @@ export enum GameType {
     MAX_GAME_TYPE
 }
 
-export enum Challenge {
+export enum ChallengeType {
     GENERAL_TOTALKILLS = 1,
     GENERAL_TOTALDEATHS = 2,
     GENERAL_TOTALGAMES = 3,
