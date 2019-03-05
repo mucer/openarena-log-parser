@@ -12,6 +12,13 @@ select s.name, count(s.game_id) from (select distinct p.name, j.game_id from per
 group by s.name
 order by s.name;
 
+-- clear
+delete from award;
+delete from game;
+delete from game_join;
+delete from kill;
+delete from score;
+
 -- names used by client
 SELECT 
     s.id, 
@@ -89,7 +96,7 @@ SELECT
   s.*,
   round(s.kills * 1.0 / s.deaths, 2) kill_death_ratio,
   round(s.kills * 60.0 / s.seconds, 2) kills_per_minute,
-  round(s.team_kills * 100.0 / s.kills, 1)||'%' team_kill_ratio
+  round(s.team_kills * 500.0 / s.kills, 1)||'%' team_kill_ratio
 FROM (
   SELECT
     t.person_name,
