@@ -22,12 +22,16 @@ export enum TeamTask {
 }
 
 export enum AwardType {
-    GAUNTLET,
-    EXCELLENT,
-    IMPRESSIVE,
-    DEFENCE,
-    CAPTURE,
-    ASSIST
+    GAUNTLET = 0,
+    EXCELLENT = 1,
+    IMPRESSIVE = 2,
+    DEFENCE = 3,
+    CAPTURE = 4,
+    ASSIST = 5,
+    CTF_GET_FLAG = 100,
+    CTF_CAPTURE_FLAG = 101,
+    CTF_FLAG_RETURNED = 102,
+    CTF_FLAG_CARRIER_FRAGGED = 103
 }
 
 export enum VideoFlags {

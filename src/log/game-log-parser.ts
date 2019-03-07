@@ -5,6 +5,7 @@ import { GameResult } from "../models/game-result";
 import { Join } from "../models/join";
 import { ClientOptionsParser } from "./client-option-parser";
 import { GameOptionsParser } from "./game-options-parser";
+import { Award } from "../models/award";
 
 const LOG_TIME_PATTERN = /^\s*(\d+):(\d+) (.*)/;
 
@@ -101,7 +102,7 @@ export class GameLogParser {
                         this.parseResult(time, data);
                         break;
                     case 'ctf':
-                        this.parseCtf(data);
+                        this.parseCtf(time, data);
                         break;
                     case 'info':
                     case 'clientconnect':
@@ -247,30 +248,21 @@ export class GameLogParser {
         }
     }
 
-    private parseCtf(data: string) {
+    private parseCtf(time: number, data: string) {
         if (this.current) {
             const match = data.match(/(\d+) (\d+) (\d+)/);
             if (!match) {
                 throw new Error(`Invalid CTF format given: ${data}`);
             }
+       
 
-            const clientId = +match[1];
-            const team = +match[1];
-            const action = +match[1];
+            const pos = +match[1];
+            const team = +match[2];
+            const type = (+match[3] + 100) as AwardType;
 
-            switch (action) {
-                case 0:
-                    // get flag
-                    break;
-                case 1:
-                    // capture flag
-                    break;
-                case 2:
-                    // flag returned
-                    break;
-                case 3:
-                    // flag carrier fragged
-                    break;
+            const client = this.current.clients[pos];
+            if (client) {
+                this.current.awards.push({ time, clientId: client.id, type });
             }
         }
     }

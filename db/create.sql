@@ -74,7 +74,11 @@ INSERT INTO award_type (id, name) VALUES
     (2, 'IMPRESSIVE'),
     (3, 'DEFENCE'),
     (4, 'CAPTURE'),
-    (5, 'ASSIST');
+    (5, 'ASSIST'),
+    (100, 'CTF_GET_FLAG'),
+    (101, 'CTF_CAPTURE_FLAG'),
+    (102, 'CTF_FLAG_RETURNED'),
+    (103, 'CTF_FLAG_CARRIER_FRAGGED');
 
 CREATE TABLE challenge (
     game_id INT NOT NULL,
@@ -211,7 +215,7 @@ INSERT INTO game_type (id, name, description) VALUES
     (11, 'DOUBLE_D', 'Double Domination'),
     (12, 'DOMINATION', 'Standard domination');
 
-CREATE OR REPLACE VIEW kill_ext AS
+CREATE MATERIALIZED VIEW kill_ext AS
     SELECT 
         p1.name from_name,
         p1.id from_id,
@@ -219,6 +223,8 @@ CREATE OR REPLACE VIEW kill_ext AS
         p2.name to_name,
         p2.id to_id,
         k.to_client_id,
+        EXTRACT(YEAR FROM start_time) || '-' || LPAD(EXTRACT(WEEK FROM start_time)::text, 2, '0') as week,
+        EXTRACT(YEAR FROM start_time) || '-' || LPAD(EXTRACT(MONTH FROM start_time)::text, 2, '0') || '-' || LPAD(EXTRACT(DAY FROM start_time)::text, 2, '0') as day,
         g.start_time,
         k.time game_time,
         k.cause,
@@ -235,3 +241,5 @@ CREATE OR REPLACE VIEW kill_ext AS
     JOIN game_type gt ON gt.id = g.type
     JOIN client c2 ON c2.id = k.to_client_id
     LEFT JOIN person p2 ON p2.id = c2.person_id;
+
+CREATE INDEX kill_ext_idx ON kill_ext(from_id, to_id, week, day, cause, map, game_type);

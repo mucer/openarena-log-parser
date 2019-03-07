@@ -94,7 +94,7 @@ WITH
   )
 SELECT
   s.*,
-  round(s.kills * 1.0 / s.deaths, 2) kill_death_ratio,
+  CASE WHEN s.deaths = 0 THEN 0 ELSE round(s.kills * 1.0 / s.deaths, 2) END kill_death_ratio,
   round(s.kills * 60.0 / s.seconds, 2) kills_per_minute,
   round(s.team_kills * 500.0 / s.kills, 1)||'%' team_kill_ratio
 FROM (
@@ -108,3 +108,23 @@ FROM (
   FROM play_time t
 ) s
 ORDER BY kill_death_ratio DESC;
+
+-- ratio per week
+SELECT p.name, p.id, s.week, s.kills * 1.0 / s.deaths ratio, s.kills, s.deaths 
+FROM (
+  SELECT week, person_id, SUM(kills) kills, SUM(deaths) deaths
+  FROM (
+    SELECT week, from_id AS person_id, COUNT(*) kills, 0 deaths
+    FROM kill_ext 
+    WHERE team_kill = false AND from_id > 1
+    GROUP BY week, person_id
+    UNION ALL
+    SELECT week, to_id AS person_id, 0, COUNT(*)
+    FROM kill_ext 
+    WHERE to_id > 1
+    GROUP BY week, person_id
+  ) s
+  GROUP BY week, person_id
+) s 
+JOIN person p ON p.id = s.person_id
+ORDER by s.week, s.person_id
