@@ -242,4 +242,56 @@ CREATE MATERIALIZED VIEW kill_ext AS
     JOIN client c2 ON c2.id = k.to_client_id
     LEFT JOIN person p2 ON p2.id = c2.person_id;
 
-CREATE INDEX kill_ext_idx ON kill_ext(from_id, to_id, week, day, cause, map, game_type);
+CREATE INDEX kill_ext_from_id_idx ON kill_ext(from_id);
+CREATE INDEX kill_ext_to_id_idx ON kill_ext(to_id);
+CREATE INDEX kill_ext_start_time_idx ON kill_ext(start_time);
+CREATE INDEX kill_ext_week_idx ON kill_ext(week);
+CREATE INDEX kill_ext_day_idx ON kill_ext(day);
+CREATE INDEX kill_ext_cause_idx ON kill_ext(cause);
+CREATE INDEX kill_ext_map_idx ON kill_ext(map);
+CREATE INDEX kill_ext_game_type_idx ON kill_ext(game_type);
+CREATE INDEX kill_ext_team_kill_idx ON kill_ext(team_kill);
+
+CREATE MATERIALIZED VIEW award_ext AS
+    SELECT 
+        a.type,
+        at.name AS type_name,
+        c.id AS client_id,
+        p.id AS person_id,
+        p.name AS person_name,
+        g.id AS game_id,
+        g.map,
+        EXTRACT(YEAR FROM g.start_time) || '-' || LPAD(EXTRACT(WEEK FROM g.start_time)::text, 2, '0') AS week,
+        EXTRACT(YEAR FROM g.start_time) || '-' || LPAD(EXTRACT(MONTH FROM g.start_time)::text, 2, '0') || '-' || LPAD(EXTRACT(DAY FROM g.start_time)::text, 2, '0') AS day,
+        g.start_time,
+        a.time        
+    FROM award a
+    JOIN award_type at ON at.id = a.type
+    JOIN game g ON g.id = a.game_id
+    JOIN client c ON c.id = a.client_id
+    LEFT JOIN person p ON p.id = c.person_id;
+
+CREATE INDEX award_ext_type_idx ON award_ext(type);
+CREATE INDEX award_ext_client_id_idx ON award_ext(client_id);
+CREATE INDEX award_ext_person_id_idx ON award_ext(person_id);
+CREATE INDEX award_ext_game_id_idx ON award_ext(game_id);
+CREATE INDEX award_ext_week_idx ON award_ext(week);
+CREATE INDEX award_ext_day_idx ON award_ext(day);
+CREATE INDEX award_ext_start_time_idx ON award_ext(start_time);
+
+-- play time per week (for stats)
+CREATE MATERIALIZED VIEW playtime_week AS
+  SELECT 
+    EXTRACT(YEAR FROM start_time) || '-' || LPAD(EXTRACT(WEEK FROM start_time)::text, 2, '0') AS week,
+    c.person_id,
+    p.name AS person_name,
+    SUM(gj.to_time - gj.from_time) AS seconds
+  FROM game g
+  JOIN game_join gj on gj.game_id = g.id
+  JOIN client c ON c.id = gj.client_id
+  JOIN person p ON p.id = c.person_id
+  GROUP BY 1, 2, 3;
+
+CREATE INDEX playtime_week_week_idx ON playtime_week (week);
+
+CREATE INDEX playtime_week_person_id_idx ON playtime_week (person_id);

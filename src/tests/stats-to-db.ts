@@ -17,7 +17,8 @@ const dao = new LogParserDao(pool);
 async function write() {
 
     const parser = new GameLogParser();
-    parser.parse(readFileSync(join(__dirname, './server1.log'), 'utf8'));
+    ['server1-2019-03-05.log', 'server1-2019-03-06.log', 'server1-2019-03-07.log'].forEach(log =>
+        parser.parse(readFileSync(join(__dirname, log), 'utf8')));
     const games = parser.getGames();
     for (let i = 0;i < games.length;i++) {
         const game = games[i];
@@ -33,6 +34,8 @@ async function write() {
     const conn = await pool.connect();
     try {
         await conn.query('REFRESH MATERIALIZED VIEW kill_ext');
+        await conn.query('REFRESH MATERIALIZED VIEW award_ext');
+        await conn.query('REFRESH MATERIALIZED VIEW playtime_week');
     } finally {
         conn.release();
     }
