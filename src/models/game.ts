@@ -1,11 +1,11 @@
 import { Award } from "./award";
+import { Challenge } from "./challenge";
 import { ClientOptions } from "./client-options";
 import { Dictionary } from "./dictionary";
 import { GameOptions } from "./game-options";
 import { GameResult } from "./game-result";
 import { Join } from "./join";
 import { Kill } from "./kill";
-import { Challenge } from "./challenge";
 
 export interface Game {
     options: GameOptions;
@@ -21,6 +21,14 @@ export interface Game {
     challenges: Challenge[];
 
     joins: Join[];
+
+    score: Dictionary<number>;
+
+    points: Dictionary<number>;
+
+    duration: number;
+
+    finished: boolean;
 
     result?: GameResult;
 }

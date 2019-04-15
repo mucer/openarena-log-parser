@@ -14,19 +14,26 @@ export class LogParserDao {
     }
 
     public async writeGame(game: Game) {
-        if (!game.result) {
-            throw new Error(`Game '${game.options.timestamp}' has not results set!`);
-        }
-
+        let step = 'VALIDATING';
         let conn: PoolClient = await this.pool.connect();
         try {
+
+            this.validate(game);
+
+            step = 'OPEN CONN';
             await conn.query('BEGIN');
 
-            const startTime = new Date(game.options.timestamp ? Date.parse(game.options.timestamp) : game.startTime);
+            step = 'INSERT GAME';
             const result: QueryResult = await conn.query(
-                'INSERT INTO game (start_time, map, type) ' +
-                'VALUES ($1, $2, $3) RETURNING id',
-                [startTime, game.options.mapName, game.options.gameType]);
+                'INSERT INTO game (start_time, map, type, host_name, duration, finished) ' +
+                'VALUES ($1, $2, $3, $4, $5, $6) RETURNING id', [
+                    new Date(game.startTime),
+                    game.options.mapName,
+                    game.options.gameType,
+                    game.options.svHostname,
+                    game.duration,
+                    game.finished
+                ]);
             const gameId: string = result.rows[0].id;
 
             // write joins
@@ -45,6 +52,7 @@ export class LogParserDao {
                 return id;
             };
 
+            step = 'INSERT JOINS';
             for (const join of game.joins) {
                 if (isBot(join.clientId)) {
                     continue;
@@ -61,6 +69,7 @@ export class LogParserDao {
             }
 
             // write awards
+            step = 'INSERT AWARDS';
             for (const award of game.awards) {
                 if (isBot(award.clientId)) {
                     continue;
@@ -74,6 +83,7 @@ export class LogParserDao {
             }
 
             // write challenges
+            step = 'INSERT CHALLENGES';
             for (const challenge of game.challenges) {
                 if (isBot(challenge.clientId)) {
                     continue;
@@ -87,6 +97,7 @@ export class LogParserDao {
             }
 
             // write kills
+            step = 'INSERT KILLS';
             for (const kill of game.kills) {
                 await conn.query(
                     'INSERT INTO kill (game_id, time, from_client_id, to_client_id, team_kill, cause) ' +
@@ -96,21 +107,22 @@ export class LogParserDao {
             }
 
             // write scores
-            for (const clientId in game.result.score) {
-                if (isBot(clientId)) {
-                    continue;
-                }
-                const internId = toIntern(clientId);
-                await conn.query(
-                    'INSERT INTO score (game_id, client_id, score) ' +
-                    'VALUES ($1, $2, $3)',
-                    [gameId, internId, game.result.score[clientId]]
-                );
-            }
+            // for (const clientId in game.result.score) {
+            //     if (isBot(clientId)) {
+            //         continue;
+            //     }
+            //     const internId = toIntern(clientId);
+            //     await conn.query(
+            //         'INSERT INTO score (game_id, client_id, score) ' +
+            //         'VALUES ($1, $2, $3)',
+            //         [gameId, internId, game.result.score[clientId]]
+            //     );
+            // }
 
+            step = 'COMMIT';
             await conn.query('COMMIT');
         } catch (e) {
-            console.error(`Error writing game ${game.options.timestamp}': ${e}`);
+            console.error(`Error writing game ${game.options.timestamp} (step ${step}): ${e}`);
             await conn.query('ROLLBACK');
         } finally {
             conn.release();
@@ -126,5 +138,19 @@ export class LogParserDao {
                 [clientId]);
         }
         return result.rows[0].id;
+    }
+
+    private validate(game: Game) {
+        if (!game.startTime) {
+            if (!game.options.timestamp) {
+                throw new Error(`No start time found!`);
+            }
+            game.startTime = new Date(Date.parse(game.options.timestamp)).getTime();
+        }
+        if (!game.duration) {
+            throw new Error('No duration given!');
+        }
+        // set end time to duration if no endtime is given
+        game.joins.filter(j => !j.endTime).forEach(j => j.endTime = game.duration);
     }
 }

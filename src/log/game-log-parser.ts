@@ -1,11 +1,9 @@
 import { ClientOptions } from "../models/client-options";
-import { AwardType, MeanOfDeath, Team, TEAM_GAME_TYPES, ChallengeType } from "../models/constants";
+import { AwardType, ChallengeType, MeanOfDeath, Team } from "../models/constants";
 import { Game } from "../models/game";
-import { GameResult } from "../models/game-result";
 import { Join } from "../models/join";
 import { ClientOptionsParser } from "./client-option-parser";
 import { GameOptionsParser } from "./game-options-parser";
-import { Award } from "../models/award";
 
 const LOG_TIME_PATTERN = /^\s*(\d+):(\d+) (.*)/;
 
@@ -50,10 +48,14 @@ export class GameLogParser {
                     time = (+match[1] * 60) + (+match[2]);
                     line = match[3];
                 } else if (this.current) {
-                    time = new Date().getTime() - this.current.startTime;
+                    time = Math.floor((new Date().getTime() - this.current.startTime) / 1000);
                 } else {
                     time = 0;
                 }
+            }
+
+            if (this.current && time) {
+                this.current.duration = time;
             }
 
             if (this.waiting.length) {
@@ -75,7 +77,7 @@ export class GameLogParser {
                         this.initGame(data);
                         break;
                     case 'shutdowngame':
-                        this.shutdownGame();
+                        this.shutdownGame(time);
                         break;
                     case 'clientuserinfochanged':
                         this.updateClient(time, data);
@@ -92,9 +94,6 @@ export class GameLogParser {
                     case 'challenge':
                         this.parseChallenge(time, data);
                         break;
-                    case 'score':
-                        this.parseScore(data);
-                        break;
                     case 'red':
                         this.parseTeamScore(data);
                         break;
@@ -103,6 +102,9 @@ export class GameLogParser {
                         break;
                     case 'ctf':
                         this.parseCtf(time, data);
+                        break;
+                    case 'playerscore':
+                        this.parsePlayerScore(data);
                         break;
                     case 'info':
                     case 'clientconnect':
@@ -117,7 +119,7 @@ export class GameLogParser {
                     case 'say': // chat message to all
                     case 'sayteam': // chat message to team
                     case 'tell': // chat message to other player
-                    case 'playerscore': // when a player got a point
+                    case 'score': // final player score
                     case 'teamscore': // when a team got a point
                     case 'warmup': // no further information
                         break;
@@ -144,8 +146,13 @@ export class GameLogParser {
             kills: [],
             joins: [],
             challenges: [],
-            startTime: new Date().getTime()
+            score: {},
+            points: {},
+            startTime: new Date().getTime(),
+            duration: 0,
+            finished: false
         };
+        this.games.push(this.current);
     }
 
     private updateClient(time: number, data: string) {
@@ -161,31 +168,34 @@ export class GameLogParser {
             // generate id for bots
             if (!client.id) {
                 client.id = `BOT${++this.nextBotId}`;
-            } else {
-                let join: Join | undefined = this.current.joins.find(j => j.clientId === client.id && j.endTime === undefined);
-                if (join && (join.name !== client.name || join.team !== client.team)) {
-                    join.endTime = time;
-                    join = undefined;
-                }
-                if (!join && client.team !== Team.SPECTATOR) {
-                    this.current.joins.push({ clientId: client.id, name: client.name, team: client.team, startTime: time });
-                }
             }
 
+            if (this.current.points[client.id] === undefined) {
+                this.current.points[client.id] = 0;
+            }
+
+            let join: Join | undefined = this.current.joins.find(j => j.clientId === client.id && j.endTime === undefined);
+            if (join && (join.name !== client.name || join.team !== client.team)) {
+                join.endTime = time;
+                join = undefined;
+            }
+            if (!join && client.team !== Team.SPECTATOR) {
+                this.current.joins.push({ clientId: client.id, name: client.name, team: client.team, startTime: time });
+            }
         }
     }
 
-    private parseScore(data: string) {
-        if (this.current && this.current.result) {
-            const match = data.match(/(\d+)  ping: \d+  client: (\d+)/);
+    private parsePlayerScore(data: string) {
+        if (this.current) {
+            const match = data.match(/(\d+) (-?\d+)/);
             if (!match) {
-                throw new Error(`Invalid score '${data}' given!`);
+                throw new Error(`Invalid player score '${data}' given!`);
             }
-            const pos = +match[2];
-            const score = +match[1];
+            const pos = +match[1];
+            const score = +match[2];
             const client = this.current.clients[pos];
             if (client) {
-                this.current.result.score[client.id] = score;
+                this.current.score[client.id] = score;
             }
         }
     }
@@ -236,12 +246,16 @@ export class GameLogParser {
             }
             const to = this.current.clients[toPos];
             if (fromId && to) {
+                const teamKill = to.team !== Team.FREE && fromTeam === to.team;
+                const suicide = fromId === to.id;
+
+                this.current.points[fromId] += teamKill || suicide ? -1 : 1;
 
                 this.current.kills.push({
                     time,
                     fromId,
                     toId: to.id,
-                    teamKill: to.team !== Team.FREE && fromTeam === to.team,
+                    teamKill,
                     cause
                 });
             }
@@ -254,16 +268,24 @@ export class GameLogParser {
             if (!match) {
                 throw new Error(`Invalid CTF format given: ${data}`);
             }
-       
 
             const pos = +match[1];
             const team = +match[2];
             const type = (+match[3] + 100) as AwardType;
-
-            const client = this.current.clients[pos];
-            if (client) {
-                this.current.awards.push({ time, clientId: client.id, type });
+            let points: number | undefined;
+            switch (type) {
+                case AwardType.CTF_GET_FLAG:
+                    points = this.calcTeamFactor(team);
+                    break;
+                case AwardType.CTF_FLAG_RETURNED:
+                    points = this.calcTeamFactor(team);
+                    break;
+                case AwardType.CTF_CAPTURE_FLAG:
+                    points = 3 * this.calcTeamFactor(team);
+                    break;
             }
+
+            this.addAward(time, pos, type, points);
         }
     }
 
@@ -279,7 +301,7 @@ export class GameLogParser {
 
             const client = this.current.clients[pos];
             if (client) {
-                this.current.awards.push({ time, clientId: client.id, type });
+                this.addAward(time, pos, type);
             }
         }
     }
@@ -303,19 +325,48 @@ export class GameLogParser {
 
     private parseResult(time: number, reason: string) {
         if (this.current) {
-            const stats: Game = this.current;
-            const result: GameResult = stats.result = {
+            const game: Game = this.current;
+            game.result = {
                 time,
-                reason,
-                score: {}
+                reason
             };
-            this.games.push(stats);
-
-            stats.joins.filter(j => !j.endTime).forEach(j => j.endTime = time);
+            game.finished = true;
         }
     }
 
-    private shutdownGame() {
-        this.current = undefined;
+    private shutdownGame(time: number) {
+        if (this.current) {
+            this.current.joins.filter(j => !j.endTime).forEach(j => j.endTime = time);
+            this.current = undefined;
+        }
+    }
+
+    private addAward(time: number, clientPos: number, type: AwardType, points?: number) {
+        if (this.current) {
+            const client = this.current.clients[clientPos];
+            if (client) {
+                this.current.awards.push({ time, clientId: client.id, type });
+
+                if (points) {
+                    this.current.points[client.id] += points;
+                }
+            }
+        }
+    }
+
+    private calcTeamFactor(team: number): number {
+        if (this.current) {
+            let other = 0;
+            let total = 0;
+            this.current.joins.forEach(j => {
+                if (j.team !== team) {
+                    other += 1;
+                } 
+                total += 1;
+            });
+            return (2 * other) / total;
+        } else {
+            return 1;
+        }
     }
 }

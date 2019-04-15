@@ -2,10 +2,15 @@ CREATE TABLE game (
     id SERIAL PRIMARY KEY,
     map VARCHAR(32) NOT NULL,
     start_time TIMESTAMP NOT NULL,
-    type SMALLINT NOT NULL
+    host_name VARCHAR(128),
+    type SMALLINT NOT NULL,
+    duration INT NOT NULL,
+    finished BOOLEAN NOT NULL
 );
 
-CREATE INDEX game_idx ON game (map, start_time, type);
+CREATE INDEX game_map_idx ON game (map);
+CREATE INDEX game_start_time_idx ON game (start_time);
+CREATE INDEX game_type_idx ON game (type);
 
 CREATE TABLE person (
     id SERIAL PRIMARY KEY,
@@ -26,7 +31,7 @@ CREATE TABLE client (
 );
 
 CREATE UNIQUE INDEX client_hw_id_idx ON client (hw_id);
-CREATE INDEX client_idx ON client (person_id);
+CREATE INDEX client_person_id_idx ON client (person_id);
 
 INSERT INTO client (id, hw_id, person_id) VALUES
     (0, 'WORLD', 0),
@@ -41,7 +46,8 @@ CREATE TABLE game_join (
     team SMALLINT NOT NULL
 );
 
-CREATE INDEX game_join_idx ON game_join (game_id, client_id);
+CREATE INDEX game_join_game_id_idx ON game_join (game_id);
+CREATE INDEX game_join_client_id_idx ON game_join (client_id);
 
 CREATE TABLE kill (
     game_id INT NOT NULL,
@@ -52,7 +58,9 @@ CREATE TABLE kill (
     cause SMALLINT NOT NULL
 );
 
-CREATE INDEX kill_idx ON kill (game_id, from_client_id, to_client_id);
+CREATE INDEX kill_game_id_idx ON kill (game_id);
+CREATE INDEX kill_from_client_id_idx ON kill (from_client_id);
+CREATE INDEX kill_to_client_id_idx ON kill (to_client_id);
 
 CREATE TABLE award (
     game_id INT NOT NULL,
@@ -61,7 +69,8 @@ CREATE TABLE award (
     type SMALLINT NOT NULL
 );
 
-CREATE INDEX award_idx ON award (game_id, client_id);
+CREATE INDEX award_game_id_idx ON award (game_id);
+CREATE INDEX award_client_id_idx ON award (client_id);
 
 CREATE TABLE award_type (
     id SMALLINT PRIMARY KEY,
@@ -87,7 +96,8 @@ CREATE TABLE challenge (
     type SMALLINT NOT NULL
 );
 
-CREATE INDEX challenge_idx ON challenge (game_id, client_id);
+CREATE INDEX challenge_game_id_idx ON challenge (game_id);
+CREATE INDEX challenge_client_id_idx ON challenge (client_id);
 
 CREATE TABLE challenge_type (
     id SMALLINT PRIMARY KEY,
@@ -156,7 +166,8 @@ CREATE TABLE score (
     score SMALLINT NOT NULL
 );
 
-CREATE INDEX score_idx ON score (game_id, client_id);
+CREATE INDEX score_game_id_idx ON score (game_id);
+CREATE INDEX score_client_id_idx ON score (client_id);
 
 CREATE TABLE mean_of_death (
     id SMALLINT PRIMARY KEY,
@@ -293,5 +304,4 @@ CREATE MATERIALIZED VIEW playtime_week AS
   GROUP BY 1, 2, 3;
 
 CREATE INDEX playtime_week_week_idx ON playtime_week (week);
-
 CREATE INDEX playtime_week_person_id_idx ON playtime_week (person_id);
