@@ -232,7 +232,6 @@ export class GameLogParser {
             const toPos = +match[2];
             const cause: MeanOfDeath = +match[3];
 
-
             let fromId: string | undefined;
             let fromTeam = -1;
             if (fromPos === 1022) {
@@ -246,10 +245,13 @@ export class GameLogParser {
             }
             const to = this.current.clients[toPos];
             if (fromId && to) {
-                const teamKill = to.team !== Team.FREE && fromTeam === to.team;
-                const suicide = fromId === to.id;
+                const teamKill = fromId === to.id || to.team !== Team.FREE && fromTeam === to.team;
+                // if a bot with skill < 5 is killed the kill is ignored
+                if (to.skill !== undefined && to.skill < 5) {
+                    return;
+                }
 
-                this.current.points[fromId] += teamKill || suicide ? -1 : 1;
+                this.current.points[fromId] += teamKill ? -1 : 1;
 
                 this.current.kills.push({
                     time,

@@ -17,8 +17,14 @@ export class LogParserDao {
         let step = 'VALIDATING';
         let conn: PoolClient = await this.pool.connect();
         try {
-
-            this.validate(game);
+            if (!game.options.timestamp) {
+                throw new Error(`No timestamp given!`);
+            }
+            if (!game.duration) {
+                throw new Error('No duration given!');
+            }
+            // set end time to duration if no endtime is given
+            game.joins.filter(j => !j.endTime).forEach(j => j.endTime = game.duration);
 
             step = 'OPEN CONN';
             await conn.query('BEGIN');
@@ -27,7 +33,7 @@ export class LogParserDao {
             const result: QueryResult = await conn.query(
                 'INSERT INTO game (start_time, map, type, host_name, duration, finished) ' +
                 'VALUES ($1, $2, $3, $4, $5, $6) RETURNING id', [
-                    new Date(game.startTime),
+                    new Date(game.options.timestamp),
                     game.options.mapName,
                     game.options.gameType,
                     game.options.svHostname,
@@ -138,19 +144,5 @@ export class LogParserDao {
                 [clientId]);
         }
         return result.rows[0].id;
-    }
-
-    private validate(game: Game) {
-        if (!game.startTime) {
-            if (!game.options.timestamp) {
-                throw new Error(`No start time found!`);
-            }
-            game.startTime = new Date(Date.parse(game.options.timestamp)).getTime();
-        }
-        if (!game.duration) {
-            throw new Error('No duration given!');
-        }
-        // set end time to duration if no endtime is given
-        game.joins.filter(j => !j.endTime).forEach(j => j.endTime = game.duration);
     }
 }

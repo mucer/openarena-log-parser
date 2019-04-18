@@ -26,7 +26,7 @@ You can use docker to setup an environment
 # create database container
 docker run --name oa-db -p 5432:5432 -d -e POSTGRES_PASSWORD=pass postgres
 # copy script to container
-docker cp db/create.sql
+docker cp db/create.sql oa-db:/tmp
 # execute script
 docker exec -it oa-db psql -U postgres -f /tmp/create.sql
 
