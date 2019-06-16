@@ -1,10 +1,9 @@
 import { readFile } from "fs-extra";
-import { join } from "path";
+import * as glob from 'glob';
 import { Pool } from "pg";
+import { argv, stdout } from "process";
 import { LogParserDao } from "../db/log-parser-dao";
 import { GameLogParser } from "../log/game-log-parser";
-import { stdout, argv } from "process";
-import * as glob from 'glob';
 
 
 class UsageError extends Error {
@@ -23,7 +22,7 @@ function listFiles(pattern: string): Promise<string[]> {
             if (err) {
                 reject(err);
             } else {
-                resolve(files);
+                resolve(files.sort());
             }
         });
     });

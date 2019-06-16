@@ -160,14 +160,14 @@ INSERT INTO challenge_type (id, name) VALUES
     (504, 'FFA_JUDGE'),
     (505, 'FFA_CHEAPKILLER');
 
-CREATE TABLE score (
+CREATE TABLE game_result (
     game_id INT NOT NULL,
     client_id INT NOT NULL,
-    score SMALLINT NOT NULL
+    points INT NOT NULL
 );
 
-CREATE INDEX score_game_id_idx ON score (game_id);
-CREATE INDEX score_client_id_idx ON score (client_id);
+CREATE INDEX game_result_game_id_idx ON game_result (game_id);
+CREATE INDEX game_result_client_id_idx ON game_result (client_id);
 
 CREATE TABLE mean_of_death (
     id SMALLINT PRIMARY KEY,

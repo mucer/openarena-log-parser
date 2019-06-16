@@ -103,6 +103,9 @@ export class GameLogParser {
                     case 'ctf':
                         this.parseCtf(time, data);
                         break;
+                    case '1fctf':
+                        this.parseOneCtf(time, data);
+                        break;
                     case 'playerscore':
                         this.parsePlayerScore(data);
                         break;
@@ -114,7 +117,6 @@ export class GameLogParser {
                     case 'dom': // events for gametype dominiation
                     case 'dd': // events for gametype double dominiation
                     case 'harvester': // events for gametype harvester
-                    case '1fctf': // events for gametype one capture the flag
                     case 'obelisk': // events for gametype obelisk
                     case 'say': // chat message to all
                     case 'sayteam': // chat message to team
@@ -272,22 +274,52 @@ export class GameLogParser {
             }
 
             const pos = +match[1];
-            const team = +match[2];
             const type = (+match[3] + 100) as AwardType;
             let points: number | undefined;
             switch (type) {
                 case AwardType.CTF_GET_FLAG:
-                    points = this.calcTeamFactor(team);
+                    points = 1;
                     break;
                 case AwardType.CTF_FLAG_RETURNED:
-                    points = this.calcTeamFactor(team);
+                    points = 2;
                     break;
                 case AwardType.CTF_CAPTURE_FLAG:
-                    points = 3 * this.calcTeamFactor(team);
+                    points = 3;
                     break;
             }
 
             this.addAward(time, pos, type, points);
+        }
+    }
+
+    private parseOneCtf(time: number, data: string) {
+        if (this.current) {
+            const match = data.match(/(\d+) ([\d-]+) (\d+)/);
+            if (!match) {
+                throw new Error(`Invalid CTF format given: ${data}`);
+            }
+
+            const pos = +match[1];
+            const rawType = +match[3];
+            let type: number | undefined;
+            let points: number | undefined;
+            switch (rawType) {
+                case 0:
+                    points = 1;
+                    type = AwardType.CTF_GET_FLAG;
+                    break;
+                case 1:
+                    points = 3;
+                    type = AwardType.CTF_CAPTURE_FLAG;
+                    break;
+                case 3:
+                    type = AwardType.CTF_FLAG_CARRIER_FRAGGED;
+                    break;
+            }
+
+            if (type) {
+                this.addAward(time, pos, type, points);
+            }
         }
     }
 
@@ -348,11 +380,17 @@ export class GameLogParser {
             const client = this.current.clients[clientPos];
             if (client) {
                 this.current.awards.push({ time, clientId: client.id, type });
-
                 if (points) {
-                    this.current.points[client.id] += points;
+                    this.addPoints(client, points);
                 }
             }
+        }
+    }
+
+    private addPoints(client: ClientOptions, points: number) {
+        if (this.current && points) {
+            const factor = (client.team === Team.BLUE || client.team === Team.RED) ? this.calcTeamFactor(client.team) : 1;
+            this.current.points[client.id] += factor * points;
         }
     }
 
@@ -363,7 +401,7 @@ export class GameLogParser {
             this.current.joins.forEach(j => {
                 if (j.team !== team) {
                     other += 1;
-                } 
+                }
                 total += 1;
             });
             return (2 * other) / total;

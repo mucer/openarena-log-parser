@@ -112,18 +112,20 @@ export class LogParserDao {
                 );
             }
 
-            // write scores
-            // for (const clientId in game.result.score) {
-            //     if (isBot(clientId)) {
-            //         continue;
-            //     }
-            //     const internId = toIntern(clientId);
-            //     await conn.query(
-            //         'INSERT INTO score (game_id, client_id, score) ' +
-            //         'VALUES ($1, $2, $3)',
-            //         [gameId, internId, game.result.score[clientId]]
-            //     );
-            // }
+            // write points
+            step = 'INSERT POINTS';
+            for (const clientId in game.points) {
+                if (isBot(clientId)) {
+                    continue;
+                }
+                const internId = toIntern(clientId);
+console.log(`points: clientId=${clientId}, internId=${internId}, points=${game.points[clientId]}`);
+                await conn.query(
+                    'INSERT INTO game_result (game_id, client_id, points) ' +
+                    'VALUES ($1, $2, $3)',
+                    [gameId, internId, Math.round(game.points[clientId])]
+                );
+            }
 
             step = 'COMMIT';
             await conn.query('COMMIT');

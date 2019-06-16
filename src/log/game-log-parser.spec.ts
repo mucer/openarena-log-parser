@@ -229,6 +229,14 @@ describe('GameLogParser', () => {
                 expect(award.time).toBe(51);
             });
 
+            it('should add CTF award', () => {
+                // when
+                parser.parse(' 8:59 CTF: 0 1 1: Name1 captured the RED flag!');
+
+                // then
+                expect(game.awards.length).toBe(1);
+            });
+
             it('should add challenge', () => {
                 // when
                 parser.parse(' 0:52 Challenge: 0 205 1: Name1 got award 205');
@@ -334,9 +342,9 @@ describe('GameLogParser', () => {
                 parser.parse(`CTF: 3 2 ${AwardType.CTF_FLAG_RETURNED - 100}`);
 
                 // then
-                expect(game.points['0'] + game.points['3']).toEqual(2);
-                expect(game.points['0']).toEqual(4 / 5);
-                expect(game.points['3']).toEqual(6 / 5);
+                expect(game.points['0'] + game.points['3']).toEqual(4);
+                expect(game.points['0']).toEqual(2 * 4 / 5);
+                expect(game.points['3']).toEqual(2 * 6 / 5);
             });
 
             it('should add point for CTF_CAPTURE_FLAG', () => {
@@ -347,9 +355,9 @@ describe('GameLogParser', () => {
                 parser.parse(`CTF: 3 2 ${AwardType.CTF_CAPTURE_FLAG - 100}`);
 
                 // then
-                expect(game.points['0'] + game.points['3']).toEqual(6);
-                expect(game.points['0']).toEqual(3 * (4 / 5));
-                expect(game.points['3']).toEqual(3 * (6 / 5));
+                expect(game.points['0'] + game.points['3']).toEqual(10);
+                expect(game.points['0']).toEqual(5 * (4 / 5));
+                expect(game.points['3']).toEqual(5 * (6 / 5));
             });
         });
     });
