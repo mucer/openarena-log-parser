@@ -4,7 +4,7 @@ import { Pool } from "pg";
 import { argv, stdout } from "process";
 import { LogParserDao } from "../db/log-parser-dao";
 import { GameLogParser } from "../log/game-log-parser";
-
+import { MeanOfDeath } from "../models/constants";
 
 class UsageError extends Error {
     constructor(error?: string) {
@@ -54,6 +54,7 @@ async function execute() {
 
     const dao = new LogParserDao(pool);
     const parser = new GameLogParser();
+    parser.weaponPoints[MeanOfDeath.RAILGUN] = 0.5;
 
     for (let file of files) {
         stdout.write(`reading file ${file}\n`);
@@ -80,6 +81,7 @@ async function execute() {
     try {
         await conn.query('REFRESH MATERIALIZED VIEW kill_ext');
         await conn.query('REFRESH MATERIALIZED VIEW award_ext');
+        await conn.query('REFRESH MATERIALIZED VIEW game_join_ext');
         await conn.query('REFRESH MATERIALIZED VIEW playtime_week');
     } finally {
         conn.release();

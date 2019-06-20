@@ -11,6 +11,7 @@ CREATE TABLE game (
 CREATE INDEX game_map_idx ON game (map);
 CREATE INDEX game_start_time_idx ON game (start_time);
 CREATE INDEX game_type_idx ON game (type);
+CREATE UNIQUE INDEX game_idx ON game (host_name, start_time);
 
 CREATE TABLE person (
     id SERIAL PRIMARY KEY,
@@ -20,9 +21,9 @@ CREATE TABLE person (
 
 CREATE UNIQUE INDEX person_name_idx ON person (name);
 
-INSERT INTO person (id, name, full_name) VALUES
-    (0, 'WORLD', 'The OpenArena world'),
-    (1, 'BOT', 'OpenArena Bots');
+INSERT INTO person (name, full_name) VALUES
+    ('WORLD', 'The OpenArena world'),
+    ('BOT', 'OpenArena Bots');
 
 CREATE TABLE client (
     id SERIAL PRIMARY KEY,
@@ -33,9 +34,9 @@ CREATE TABLE client (
 CREATE UNIQUE INDEX client_hw_id_idx ON client (hw_id);
 CREATE INDEX client_person_id_idx ON client (person_id);
 
-INSERT INTO client (id, hw_id, person_id) VALUES
-    (0, 'WORLD', 0),
-    (1, 'BOT', 1);
+INSERT INTO client (hw_id, person_id) VALUES
+    ('WORLD', 1),
+    ('BOT', 2);
 
 CREATE TABLE game_join ( 
     game_id INT NOT NULL,
@@ -241,6 +242,7 @@ CREATE MATERIALIZED VIEW kill_ext AS
         k.cause,
         m.name cause_name,
         k.team_kill,
+        g.id game_id,
         g.map,
         g.type game_type,
         gt.name game_type_name
@@ -260,6 +262,7 @@ CREATE INDEX kill_ext_week_idx ON kill_ext(week);
 CREATE INDEX kill_ext_day_idx ON kill_ext(day);
 CREATE INDEX kill_ext_cause_idx ON kill_ext(cause);
 CREATE INDEX kill_ext_map_idx ON kill_ext(map);
+CREATE INDEX kill_ext_game_id_idx ON kill_ext(game_id);
 CREATE INDEX kill_ext_game_type_idx ON kill_ext(game_type);
 CREATE INDEX kill_ext_team_kill_idx ON kill_ext(team_kill);
 
@@ -305,3 +308,25 @@ CREATE MATERIALIZED VIEW playtime_week AS
 
 CREATE INDEX playtime_week_week_idx ON playtime_week (week);
 CREATE INDEX playtime_week_person_id_idx ON playtime_week (person_id);
+
+CREATE MATERIALIZED VIEW game_join_ext AS
+    SELECT 
+        g.start_time +  gj.from_time * interval '1 second' AS from_time,
+        g.start_time + gj.to_time * interval '1 second' AS to_time,
+        gj.to_time - gj.from_time AS duration,
+        c.id AS client_id,
+        p.id AS person_id,
+        p.name AS person_name,
+        g.id AS game_id,
+        g.map,
+        EXTRACT(YEAR FROM g.start_time) || '-' || LPAD(EXTRACT(WEEK FROM g.start_time)::text, 2, '0') AS week,
+        EXTRACT(YEAR FROM g.start_time) || '-' || LPAD(EXTRACT(MONTH FROM g.start_time)::text, 2, '0') || '-' || LPAD(EXTRACT(DAY FROM g.start_time)::text, 2, '0') AS day,
+        g.start_time     
+    FROM game_join gj
+    JOIN game g ON g.id = gj.game_id
+    JOIN client c ON c.id = gj.client_id
+    LEFT JOIN person p ON p.id = c.person_id;
+
+CREATE INDEX game_join_ext_from_time_idx ON game_join_ext (from_time);
+CREATE INDEX game_join_ext_to_time_idx ON game_join_ext (to_time);
+CREATE INDEX game_join_ext_person_id_idx ON game_join_ext (person_id);

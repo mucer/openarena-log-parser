@@ -42,84 +42,85 @@ export class LogParserDao {
                 ]);
             const gameId: string = result.rows[0].id;
 
-            // write joins
+            // write joins (no intern id will be found, if client only joined as spectator)
             const internIds: { [hwId: string]: number } = {};
-            const toIntern = (hwId: string): number => {
+            const toIntern = (hwId: string): number | undefined => {
                 if (hwId === '<world>') {
-                    return 0;
-                } else if (isBot(hwId)) {
                     return 1;
+                } else if (isBot(hwId)) {
+                    return 2;
                 }
 
-                const id = internIds[hwId];
-                if (id === undefined) {
-                    throw new Error(`no intern ID for hardware ID '${hwId}' found!`);
-                }
-                return id;
+                return internIds[hwId];
             };
 
             step = 'INSERT JOINS';
             for (const join of game.joins) {
-                if (isBot(join.clientId)) {
-                    continue;
-                }
-                if (!internIds[join.clientId]) {
-                    internIds[join.clientId] = await this.writeClient(join.clientId, conn);
+                let internId = toIntern(join.clientId);
+                if (internId === undefined) {
+                    internId = internIds[join.clientId] = await this.writeClient(join.clientId, conn);
                 }
 
                 await conn.query(
                     'INSERT INTO game_join (game_id, client_id, from_time, to_time, name, team) ' +
                     'VALUES ($1, $2, $3, $4, $5, $6)',
-                    [gameId, toIntern(join.clientId), join.startTime, join.endTime, join.name, join.team]
+                    [gameId, internId, join.startTime, join.endTime, join.name, join.team]
                 );
             }
 
             // write awards
             step = 'INSERT AWARDS';
             for (const award of game.awards) {
-                if (isBot(award.clientId)) {
+                const internId = toIntern(award.clientId);
+                if (internId === undefined) {
                     continue;
                 }
 
                 await conn.query(
                     'INSERT INTO award (game_id, time, client_id, type) ' +
                     'VALUES ($1, $2, $3, $4)',
-                    [gameId, award.time, toIntern(award.clientId), award.type]
+                    [gameId, award.time, internId, award.type]
                 );
             }
 
             // write challenges
             step = 'INSERT CHALLENGES';
             for (const challenge of game.challenges) {
-                if (isBot(challenge.clientId)) {
+                const internId = toIntern(challenge.clientId);
+                if (internId === undefined) {
                     continue;
                 }
 
                 await conn.query(
                     'INSERT INTO challenge (game_id, time, client_id, type) ' +
                     'VALUES ($1, $2, $3, $4)',
-                    [gameId, challenge.time, toIntern(challenge.clientId), challenge.type]
+                    [gameId, challenge.time, internId, challenge.type]
                 );
             }
 
             // write kills
             step = 'INSERT KILLS';
             for (const kill of game.kills) {
+                const internFromId = toIntern(kill.fromId);
+                const internToId = toIntern(kill.toId);
+                if (internFromId === undefined || internToId === undefined) {
+                    continue;
+                }
+
                 await conn.query(
                     'INSERT INTO kill (game_id, time, from_client_id, to_client_id, team_kill, cause) ' +
                     'VALUES ($1, $2, $3, $4, $5, $6)',
-                    [gameId, kill.time, toIntern(kill.fromId), toIntern(kill.toId), kill.teamKill, kill.cause]
+                    [gameId, kill.time, internFromId, internToId, kill.teamKill, kill.cause]
                 );
             }
 
             // write points
             step = 'INSERT POINTS';
             for (const clientId in game.points) {
-                if (isBot(clientId)) {
+                const internId = toIntern(clientId);
+                if (internId === undefined) {
                     continue;
                 }
-                const internId = toIntern(clientId);
-console.log(`points: clientId=${clientId}, internId=${internId}, points=${game.points[clientId]}`);
                 await conn.query(
                     'INSERT INTO game_result (game_id, client_id, points) ' +
                     'VALUES ($1, $2, $3)',

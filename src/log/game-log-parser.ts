@@ -8,6 +8,8 @@ import { GameOptionsParser } from "./game-options-parser";
 const LOG_TIME_PATTERN = /^\s*(\d+):(\d+) (.*)/;
 
 export class GameLogParser {
+    public weaponPoints: { [cause: number]: number } = [];
+
     private nextBotId = 0;
 
     private games: Game[] = [];
@@ -234,26 +236,27 @@ export class GameLogParser {
             const toPos = +match[2];
             const cause: MeanOfDeath = +match[3];
 
+            let from: ClientOptions | undefined;
             let fromId: string | undefined;
-            let fromTeam = -1;
             if (fromPos === 1022) {
                 fromId = '<world>';
             } else {
-                const from = this.current.clients[fromPos];
-                if (from) {
-                    fromId = from ? from.id : undefined;
-                    fromTeam = from.team;
-                }
+                from = this.current.clients[fromPos];
+                fromId = from && from.id;
             }
             const to = this.current.clients[toPos];
             if (fromId && to) {
-                const teamKill = fromId === to.id || to.team !== Team.FREE && fromTeam === to.team;
+                const teamKill = fromId === to.id || to.team !== Team.FREE && !!from && from.team === to.team;
                 // if a bot with skill < 5 is killed the kill is ignored
                 if (to.skill !== undefined && to.skill < 5) {
                     return;
                 }
 
-                this.current.points[fromId] += teamKill ? -1 : 1;
+                if (from) {
+                    const factor = this.weaponPoints[cause] !== undefined ? this.weaponPoints[cause] : 1;
+
+                    this.addPoints(from, teamKill ? -1 : factor);
+                }
 
                 this.current.kills.push({
                     time,
@@ -389,7 +392,7 @@ export class GameLogParser {
 
     private addPoints(client: ClientOptions, points: number) {
         if (this.current && points) {
-            const factor = (client.team === Team.BLUE || client.team === Team.RED) ? this.calcTeamFactor(client.team) : 1;
+            const factor = points > 0 && (client.team === Team.BLUE || client.team === Team.RED) ? this.calcTeamFactor(client.team) : 1;
             this.current.points[client.id] += factor * points;
         }
     }
