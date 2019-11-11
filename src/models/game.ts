@@ -24,8 +24,6 @@ export interface Game {
 
     score: Dictionary<number>;
 
-    points: Dictionary<number>;
-
     duration: number;
 
     finished: boolean;

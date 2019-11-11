@@ -28,10 +28,10 @@ export enum AwardType {
     DEFENCE = 3,
     CAPTURE = 4,
     ASSIST = 5,
-    CTF_GET_FLAG = 100,
-    CTF_CAPTURE_FLAG = 101,
-    CTF_FLAG_RETURNED = 102,
-    CTF_FLAG_CARRIER_FRAGGED = 103
+    GET_FLAG = 100,
+    CAPTURE_FLAG = 101,
+    RETURN_FLAG = 102,
+    FRAG_FLAG_CARRIER = 103
 }
 
 export enum VideoFlags {

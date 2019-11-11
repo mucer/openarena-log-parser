@@ -23,7 +23,12 @@ CREATE UNIQUE INDEX person_name_idx ON person (name);
 
 INSERT INTO person (name, full_name) VALUES
     ('WORLD', 'The OpenArena world'),
-    ('BOT', 'OpenArena Bots');
+    ('UNKNOWN', 'Clients without a valid ID'),
+    ('BOT-SKILL-1', 'Bot Skill Level 1'),
+    ('BOT-SKILL-2', 'Bot Skill Level 2'),
+    ('BOT-SKILL-3', 'Bot Skill Level 3'),
+    ('BOT-SKILL-4', 'Bot Skill Level 4'),
+    ('BOT-SKILL-5', 'Bot Skill Level 5');
 
 CREATE TABLE client (
     id SERIAL PRIMARY KEY,
@@ -36,7 +41,12 @@ CREATE INDEX client_person_id_idx ON client (person_id);
 
 INSERT INTO client (hw_id, person_id) VALUES
     ('WORLD', 1),
-    ('BOT', 2);
+    ('UNKNOWN', 2),
+    ('BOT-SKILL-1', 3),
+    ('BOT-SKILL-2', 4),
+    ('BOT-SKILL-3', 5),
+    ('BOT-SKILL-4', 6),
+    ('BOT-SKILL-5', 7);
 
 CREATE TABLE game_join ( 
     game_id INT NOT NULL,
@@ -56,7 +66,10 @@ CREATE TABLE kill (
     from_client_id INT NOT NULL,
     to_client_id INT NOT NULL,
     team_kill BOOLEAN NOT NULL,
-    cause SMALLINT NOT NULL
+    cause SMALLINT NOT NULL,
+    flag_carrier BOOLEAN NOT NULL,
+    team_size_own INT NOT NULL,
+    team_size_other INT NOT NULL
 );
 
 CREATE INDEX kill_game_id_idx ON kill (game_id);
@@ -67,7 +80,9 @@ CREATE TABLE award (
     game_id INT NOT NULL,
     time INT NOT NULL,
     client_id INT NOT NULL,
-    type SMALLINT NOT NULL
+    type SMALLINT NOT NULL,
+    team_size_own INT NOT NULL,
+    team_size_other INT NOT NULL
 );
 
 CREATE INDEX award_game_id_idx ON award (game_id);
@@ -85,16 +100,18 @@ INSERT INTO award_type (id, name) VALUES
     (3, 'DEFENCE'),
     (4, 'CAPTURE'),
     (5, 'ASSIST'),
-    (100, 'CTF_GET_FLAG'),
-    (101, 'CTF_CAPTURE_FLAG'),
-    (102, 'CTF_FLAG_RETURNED'),
-    (103, 'CTF_FLAG_CARRIER_FRAGGED');
+    (100, 'GET_FLAG'),
+    (101, 'CAPTURE_FLAG'),
+    (102, 'RETURN_FLAG'),
+    (103, 'FRAG_FLAG_CARRIER');
 
 CREATE TABLE challenge (
     game_id INT NOT NULL,
     time INT NOT NULL,
     client_id INT NOT NULL,
-    type SMALLINT NOT NULL
+    type SMALLINT NOT NULL,
+    team_size_own INT NOT NULL,
+    team_size_other INT NOT NULL
 );
 
 CREATE INDEX challenge_game_id_idx ON challenge (game_id);
@@ -227,6 +244,14 @@ INSERT INTO game_type (id, name, description) VALUES
     (11, 'DOUBLE_D', 'Double Domination'),
     (12, 'DOMINATION', 'Standard domination');
 
+CREATE FUNCTION week(timestamp) RETURNS varchar AS $$ 
+  SELECT EXTRACT(YEAR FROM $1) || '-' || LPAD(EXTRACT(WEEK FROM $1)::text, 2, '0') as week
+$$ LANGUAGE SQL;
+
+CREATE FUNCTION day(timestamp) RETURNS varchar AS $$ 
+  SELECT EXTRACT(YEAR FROM $1) || '-' || LPAD(EXTRACT(MONTH FROM $1)::text, 2, '0') || '-' || LPAD(EXTRACT(DAY FROM $1)::text, 2, '0') as day
+$$ LANGUAGE SQL;
+
 CREATE MATERIALIZED VIEW kill_ext AS
     SELECT 
         p1.name from_name,
@@ -235,8 +260,8 @@ CREATE MATERIALIZED VIEW kill_ext AS
         p2.name to_name,
         p2.id to_id,
         k.to_client_id,
-        EXTRACT(YEAR FROM start_time) || '-' || LPAD(EXTRACT(WEEK FROM start_time)::text, 2, '0') as week,
-        EXTRACT(YEAR FROM start_time) || '-' || LPAD(EXTRACT(MONTH FROM start_time)::text, 2, '0') || '-' || LPAD(EXTRACT(DAY FROM start_time)::text, 2, '0') as day,
+        week(g.start_time),
+        day(g.start_time),
         g.start_time,
         k.time game_time,
         k.cause,
@@ -275,8 +300,8 @@ CREATE MATERIALIZED VIEW award_ext AS
         p.name AS person_name,
         g.id AS game_id,
         g.map,
-        EXTRACT(YEAR FROM g.start_time) || '-' || LPAD(EXTRACT(WEEK FROM g.start_time)::text, 2, '0') AS week,
-        EXTRACT(YEAR FROM g.start_time) || '-' || LPAD(EXTRACT(MONTH FROM g.start_time)::text, 2, '0') || '-' || LPAD(EXTRACT(DAY FROM g.start_time)::text, 2, '0') AS day,
+        week(g.start_time),
+        day(g.start_time),
         g.start_time,
         a.time        
     FROM award a
@@ -296,7 +321,7 @@ CREATE INDEX award_ext_start_time_idx ON award_ext(start_time);
 -- play time per week (for stats)
 CREATE MATERIALIZED VIEW playtime_week AS
   SELECT 
-    EXTRACT(YEAR FROM start_time) || '-' || LPAD(EXTRACT(WEEK FROM start_time)::text, 2, '0') AS week,
+    week(g.start_time),
     c.person_id,
     p.name AS person_name,
     SUM(gj.to_time - gj.from_time) AS seconds
@@ -330,3 +355,44 @@ CREATE MATERIALIZED VIEW game_join_ext AS
 CREATE INDEX game_join_ext_from_time_idx ON game_join_ext (from_time);
 CREATE INDEX game_join_ext_to_time_idx ON game_join_ext (to_time);
 CREATE INDEX game_join_ext_person_id_idx ON game_join_ext (person_id);
+
+CREATE VIEW game_points AS
+  SELECT
+    g.id AS game_id,
+    c.id AS client_id,
+    c.person_id,
+    playtime.seconds,
+    COALESCE((
+        SELECT
+          SUM(CASE 
+            WHEN at.name = 'CAPTURE_FLAG' AND gt.name = 'CTF' THEN 5.0 * (a.team_size_other / a.team_size_own)
+            WHEN at.name = 'CAPTURE_FLAG' AND gt.name = '1FCTF' THEN 5.0 * (a.team_size_other / a.team_size_own)
+            WHEN at.name = 'GET_FLAG' AND gt.name = 'CTF' THEN 3.0 * (a.team_size_other / a.team_size_own)
+            WHEN at.name = 'GET_FLAG' AND gt.name = '1FCTF' THEN 1.0 * (a.team_size_other / a.team_size_own)
+            WHEN at.name = 'RETURN_FLAG' AND gt.name = 'CTF' THEN 2.0 * (a.team_size_other / a.team_size_own)
+            ELSE 0
+          END)
+        FROM award a
+        JOIN award_type at on at.id = a.type
+        WHERE a.game_id = playtime.game_id
+        AND a.client_id = c.id
+        AND at.name IN ('CAPTURE', 'GET_FLAG', 'CAPTURE_FLAG', 'RETURN_FLAG')
+    ), 0) AS award_points,
+    COALESCE((
+        SELECT 
+          SUM(CASE
+            WHEN k.team_kill = true THEN -1
+            ELSE 1.0 * k.team_size_other / k.team_size_own
+          END)
+        FROM kill k
+        WHERE k.game_id = playtime.game_id
+        AND k.from_client_id = c.id
+    ), 0) AS kill_points
+  FROM (
+    SELECT gj.game_id, gj.client_id, SUM(gj.to_time - gj.from_time) as seconds
+    FROM game_join gj
+    GROUP BY gj.game_id, gj.client_id
+  ) AS playtime
+  JOIN game g ON g.id = playtime.game_id
+  JOIN game_type gt ON gt.id = g.type
+  JOIN client c ON c.id = playtime.client_id;

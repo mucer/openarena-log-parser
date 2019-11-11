@@ -1,11 +1,14 @@
 import { ClientOptions } from "../models/client-options";
-import { AwardType, GameType, MeanOfDeath, ChallengeType } from "../models/constants";
+import { AwardType, GameType, MeanOfDeath, ChallengeType, Team } from "../models/constants";
 import { GameLogParser } from "./game-log-parser";
 import expect = require("expect");
 import { Game } from "../models/game";
 import { Award } from "../models/award";
 import { GameResult } from "../models/game-result";
 import { Kill } from "../models/kill";
+import { Join } from "../models/join";
+import { Client } from "pg";
+import { Challenge } from "../models/challenge";
 
 describe('GameLogParser', () => {
     let parser: GameLogParser;
@@ -91,107 +94,221 @@ describe('GameLogParser', () => {
             expect(game.duration).toBe(75);
         });
 
+
+
+        it('should keep bot id', () => {
+            // when
+            parser.parse(' 0:30 ClientUserinfoChanged: 0 n\\Name1\\t\\1\\skill\\1');
+            parser.parse(' 0:31 ClientUserinfoChanged: 0 n\\Name1\\t\\1\\skill\\1');
+
+            // then
+            expect(game.clients).toEqual([{
+                name: 'Name1',
+                id: 'BOT-SKILL-1-NUM-1',
+                skill: 1,
+                team: Team.RED
+            }] as ClientOptions[]);
+
+            expect(game.joins).toEqual([{
+                clientId: 'BOT-SKILL-1-NUM-1',
+                name: 'Name1',
+                team: Team.RED,
+                startTime: 30
+            }] as Join[]);
+        });
+
         describe('with client', () => {
-            let client: ClientOptions;
 
             beforeEach(() => {
-                parser.parse(' 0:15 ClientUserinfoChanged: 0 n\\Name1\\id\\A\\t\\1\\model\\X');
-                client = game.clients[0]!;
+                parser.parse(' 0:15 ClientUserinfoChanged: 0 n\\Name1\\id\\A\\t\\1\\hc\\100');
             });
 
             it('should add client and join', () => {
                 // then
                 expect(game.duration).toBe(15);
                 expect(game.clients.length).toBe(1);
-                expect(client.name).toBe('Name1');
-                expect(client.id).toBe('A');
-                expect(client.model).toBe('X');
+                expect(game.clients[0]).toEqual({
+                    name: 'Name1',
+                    id: 'A',
+                    handicap: 100,
+                    team: Team.RED
+                } as ClientOptions);
+
                 expect(game.joins.length).toBe(1);
-                const join = game.joins[0];
-                expect(join.clientId).toBe('A');
-                expect(join.name).toBe('Name1');
-                expect(join.team).toBe(1);
-                expect(join.startTime).toBe(15);
-                expect(join.endTime).toBeUndefined();
+                expect(game.joins[0]).toEqual({
+                    clientId: 'A',
+                    name: 'Name1',
+                    team: Team.RED,
+                    startTime: 15
+                } as Join);
+
+                expect(parser.getTeamSize(Team.RED)).toEqual({
+                    own: 1,
+                    other: 0
+                });
+
+                expect(parser.getTeamSize(Team.BLUE)).toEqual({
+                    own: 0,
+                    other: 1
+                });
             });
 
             it('should update client and add join when name changes', () => {
                 // when
-                parser.parse(' 0:20 ClientUserinfoChanged: 0 n\\Name2\\id\\A\\t\\1\\model\\X');
+                parser.parse(' 0:20 ClientUserinfoChanged: 0 n\\Name2\\id\\A\\t\\1\\hc\\100');
 
                 // then
                 expect(game.duration).toBe(20);
                 expect(game.clients.length).toBe(1);
-                expect(client.name).toBe('Name2');
-                expect(client.team).toBe(1);
-                expect(client.model).toBe('X');
+                expect(game.clients[0]).toEqual({
+                    name: 'Name2',
+                    id: 'A',
+                    handicap: 100,
+                    team: Team.RED
+                } as ClientOptions);
+
                 expect(game.joins.length).toBe(2);
-                const join1 = game.joins[0];
-                const join2 = game.joins[1];
-                expect(join1.clientId).toBe('A');
-                expect(join1.name).toBe('Name1');
-                expect(join1.team).toBe(1);
-                expect(join1.startTime).toBe(15);
-                expect(join1.endTime).toBe(20);
-                expect(join2.clientId).toBe('A');
-                expect(join2.name).toBe('Name2');
-                expect(join2.team).toBe(1);
-                expect(join2.startTime).toBe(20);
-                expect(join2.endTime).toBeUndefined();
+
+                expect(game.joins[0]).toEqual({
+                    clientId: 'A',
+                    name: 'Name1',
+                    team: Team.RED,
+                    startTime: 15,
+                    endTime: 20
+                } as Join);
+
+                expect(game.joins[1]).toEqual({
+                    clientId: 'A',
+                    name: 'Name2',
+                    team: Team.RED,
+                    startTime: 20
+                } as Join);
+
+                expect(parser.getTeamSize(Team.RED)).toEqual({
+                    own: 1,
+                    other: 0
+                });
+
+                expect(parser.getTeamSize(Team.BLUE)).toEqual({
+                    own: 0,
+                    other: 1
+                });
             });
 
             it('should update client and add join when team changes', () => {
                 // when
-                parser.parse(' 0:30 ClientUserinfoChanged: 0 n\\Name1\\id\\A\\t\\2\\model\\X');
+                parser.parse(' 0:30 ClientUserinfoChanged: 0 n\\Name1\\id\\A\\t\\2\\hc\\100');
 
                 // then
                 expect(game.duration).toBe(30);
                 expect(game.clients.length).toBe(1);
-                expect(client.name).toBe('Name1');
-                expect(client.team).toBe(2);
-                expect(client.model).toBe('X');
+                expect(game.clients[0]).toEqual({
+                    name: 'Name1',
+                    id: 'A',
+                    handicap: 100,
+                    team: Team.BLUE
+                } as ClientOptions);
+
                 expect(game.joins.length).toBe(2);
-                const join1 = game.joins[0];
-                const join2 = game.joins[1];
-                expect(join1.clientId).toBe('A');
-                expect(join1.name).toBe('Name1');
-                expect(join1.team).toBe(1);
-                expect(join1.startTime).toBe(15);
-                expect(join1.endTime).toBe(30);
-                expect(join2.clientId).toBe('A');
-                expect(join2.name).toBe('Name1');
-                expect(join2.team).toBe(2);
-                expect(join2.startTime).toBe(30);
-                expect(join2.endTime).toBeUndefined();
+
+                expect(game.joins).toEqual([
+                    {
+                        clientId: 'A',
+                        name: 'Name1',
+                        team: Team.RED,
+                        startTime: 15,
+                        endTime: 30
+                    },
+                    {
+                        clientId: 'A',
+                        name: 'Name1',
+                        team: Team.BLUE,
+                        startTime: 30
+                    }
+                ] as Join[]);
+
+                expect(parser.getTeamSize(Team.RED)).toEqual({
+                    own: 0,
+                    other: 1
+                });
+
+                expect(parser.getTeamSize(Team.BLUE)).toEqual({
+                    own: 1,
+                    other: 0
+                });
             });
 
             it('should not add join when no relevant info changed', () => {
                 // when
-                parser.parse(' 0:40 ClientUserinfoChanged: 0 n\\Name1\\id\\A\\t\\1\\model\\Y');
+                parser.parse(' 0:40 ClientUserinfoChanged: 0 n\\Name1\\id\\A\\t\\1\\hc\\50');
 
                 // then
                 expect(game.duration).toBe(40);
                 expect(game.clients.length).toBe(1);
-                expect(client.name).toBe('Name1');
-                expect(client.team).toBe(1);
-                expect(client.model).toBe('Y');
+                expect(game.clients[0]).toEqual({
+                    name: 'Name1',
+                    id: 'A',
+                    handicap: 50,
+                    team: Team.RED
+                } as ClientOptions);
+
                 expect(game.joins.length).toBe(1);
-                const join = game.joins[0];
-                expect(join.clientId).toBe('A');
-                expect(join.name).toBe('Name1');
-                expect(join.team).toBe(1);
-                expect(join.startTime).toBe(15);
-                expect(join.endTime).toBeUndefined();
+
+                expect(game.joins[0]).toEqual({
+                    clientId: 'A',
+                    name: 'Name1',
+                    team: Team.RED,
+                    startTime: 15
+                } as Join);
             });
 
-            it('should add second client', () => {
+            it('should add other clients', () => {
                 // when
-                parser.parse('ClientUserinfoChanged: 1 n\\Name2');
+                parser.parse('ClientUserinfoChanged: 1 n\\Name2\\t\\1\\id\\B');
+                parser.parse('ClientUserinfoChanged: 2 n\\Name3\\t\\1\\id\\C');
+                parser.parse('ClientUserinfoChanged: 3 n\\Name4\\id\\D');
+                parser.parse('ClientUserinfoChanged: 4 n\\Name5\\t\\2\\id\\E');
 
                 // then
-                expect(game.clients.length).toBe(2);
-                expect(client.name).toBe('Name1');
-                expect(game.clients[1]!.name).toBe('Name2');
+                expect(game.clients.length).toBe(5);
+                expect(game.clients).toEqual([
+                    {
+                        name: 'Name1',
+                        id: 'A',
+                        handicap: 100,
+                        team: Team.RED
+                    },
+                    {
+                        name: 'Name2',
+                        id: 'B',
+                        team: Team.RED
+                    },
+                    {
+                        name: 'Name3',
+                        id: 'C',
+                        team: Team.RED
+                    },
+                    {
+                        name: 'Name4',
+                        id: 'D',
+                        team: Team.SPECTATOR
+                    },
+                    {
+                        name: 'Name5',
+                        id: 'E',
+                        team: Team.BLUE
+                    }
+                ] as ClientOptions[]);
+
+                expect(parser.getTeamSize(Team.RED)).toEqual({
+                    own: 3,
+                    other: 1
+                });
+
+                expect(parser.getTeamSize(Team.BLUE)).toEqual({
+                    own: 1,
+                    other: 3
+                });
             });
 
             it('should remove client', () => {
@@ -211,10 +328,15 @@ describe('GameLogParser', () => {
                 expect(game.duration).toBe(50);
                 expect(game.kills.length).toBe(1);
                 const kill: Kill = game.kills[0];
-                expect(kill.fromId).toBe('A');
-                expect(kill.toId).toBe('A');
-                expect(kill.cause).toBe(MeanOfDeath.SUICIDE);
-                expect(kill.time).toBe(50);
+                expect(kill).toEqual({
+                    fromId: 'A',
+                    toId: 'A',
+                    cause: MeanOfDeath.SUICIDE,
+                    teamKill: true,
+                    flagCarrier: false,
+                    time: 50,
+                    teamSize: { own: 1, other: 0 }
+                } as Kill);
             });
 
             it('should add award', () => {
@@ -223,10 +345,15 @@ describe('GameLogParser', () => {
 
                 // then
                 expect(game.awards.length).toBe(1);
-                const award: Award = game.awards[0];
-                expect(award.clientId).toBe('A');
-                expect(award.type).toBe(AwardType.CAPTURE);
-                expect(award.time).toBe(51);
+                expect(game.awards[0]).toEqual({
+                    clientId: 'A',
+                    type: AwardType.CAPTURE,
+                    time: 51,
+                    teamSize: {
+                        own: 1,
+                        other: 0
+                    }
+                } as Award);
             });
 
             it('should add CTF award', () => {
@@ -235,6 +362,15 @@ describe('GameLogParser', () => {
 
                 // then
                 expect(game.awards.length).toBe(1);
+                expect(game.awards[0]).toEqual({
+                    clientId: 'A',
+                    type: AwardType.CAPTURE_FLAG,
+                    time: 539,
+                    teamSize: {
+                        own: 1,
+                        other: 0
+                    }
+                } as Award);
             });
 
             it('should add challenge', () => {
@@ -243,10 +379,15 @@ describe('GameLogParser', () => {
 
                 // then
                 expect(game.challenges.length).toBe(1);
-                const challenge = game.challenges[0];
-                expect(challenge.clientId).toBe('A');
-                expect(challenge.type).toBe(ChallengeType.WEAPON_ROCKET_KILLS);
-                expect(challenge.time).toBe(52);
+                expect(game.challenges[0]).toEqual({
+                    clientId: 'A',
+                    type: ChallengeType.WEAPON_ROCKET_KILLS,
+                    time: 52,
+                    teamSize: {
+                        own: 1,
+                        other: 0
+                    }
+                } as Challenge);
             });
 
             it('should set player score', () => {
@@ -276,88 +417,6 @@ describe('GameLogParser', () => {
                 expect(result.reason).toBe('Capturelimit hit.');
                 expect(result.red).toBe(0);
                 expect(result.blue).toBe(3);
-            });
-        });
-
-        describe('points', () => {
-            beforeEach(() => {
-                // total 5 players
-                // 0,1,2 in team 1
-                // 3,4 in team 2
-                parser.parse('ClientUserinfoChanged: 0 n\\Name 0\\id\\0\\t\\1');
-                parser.parse('ClientUserinfoChanged: 1 n\\Name 1\\id\\1\\t\\1');
-                parser.parse('ClientUserinfoChanged: 2 n\\Name 2\\id\\2\\t\\1');
-                parser.parse('ClientUserinfoChanged: 3 n\\Name 3\\id\\3\\t\\2');
-                parser.parse('ClientUserinfoChanged: 4 n\\Name 4\\id\\4\\t\\2');
-            });
-
-            it('should add points for a kill', () => {
-                // when
-                parser.parse(`Kill: 0 3 ${MeanOfDeath.ROCKET}`);
-
-                // then
-                expect(game.points['0']).toEqual(1);
-            });
-
-            it('should remove point for suicide', () => {
-                // given
-                game.points['0'] = 10;
-
-                // when
-                parser.parse(`Kill: 0 0 ${MeanOfDeath.SUICIDE}`);
-
-                // then
-                expect(game.points['0']).toEqual(9);
-            });
-
-            it('should remove point for team kill', () => {
-                // given
-                game.points['0'] = 10;
-
-                // when
-                parser.parse(`Kill: 0 1 ${MeanOfDeath.ROCKET}`);
-
-                // then
-                expect(game.points['0']).toEqual(9);
-            });
-
-            it('should add point for CTF_GET_FLAG', () => {
-                // given
-
-                // when
-                parser.parse(`CTF: 0 1 ${AwardType.CTF_GET_FLAG - 100}`);
-                parser.parse(`CTF: 3 2 ${AwardType.CTF_GET_FLAG - 100}`);
-
-                // then
-                expect(game.points['0'] + game.points['3']).toEqual(2);
-                expect(game.points['0']).toEqual(4 / 5);
-                expect(game.points['3']).toEqual(6 / 5);
-            });
-
-            it('should add point for CTF_FLAG_RETURNED', () => {
-                // given
-
-                // when
-                parser.parse(`CTF: 0 1 ${AwardType.CTF_FLAG_RETURNED - 100}`);
-                parser.parse(`CTF: 3 2 ${AwardType.CTF_FLAG_RETURNED - 100}`);
-
-                // then
-                expect(game.points['0'] + game.points['3']).toEqual(4);
-                expect(game.points['0']).toEqual(2 * 4 / 5);
-                expect(game.points['3']).toEqual(2 * 6 / 5);
-            });
-
-            it('should add point for CTF_CAPTURE_FLAG', () => {
-                // given
-
-                // when
-                parser.parse(`CTF: 0 1 ${AwardType.CTF_CAPTURE_FLAG - 100}`);
-                parser.parse(`CTF: 3 2 ${AwardType.CTF_CAPTURE_FLAG - 100}`);
-
-                // then
-                expect(game.points['0'] + game.points['3']).toEqual(10);
-                expect(game.points['0']).toEqual(5 * (4 / 5));
-                expect(game.points['3']).toEqual(5 * (6 / 5));
             });
         });
     });

@@ -5,11 +5,13 @@
             "name": "stats-to-db.ts",
             "type": "node",
             "request": "launch",
-            "args": ["src/cli/stats-to-db.ts", "postgres/test@localhost/postgres", "logs/*.log"],
+            "args": ["src/cli/stats-to-db.ts", "postgres/pass@localhost/postgres", "logs/server1-2019-07-05.log"],
             "runtimeArgs": ["-r", "ts-node/register"],
             "cwd": "${workspaceRoot}",
             "protocol": "inspector",
-            "internalConsoleOptions": "openOnSessionStart"
+            "internalConsoleOptions": "openOnSessionStart",
+            "console": "internalConsole", 
+            "outputCapture": "std",
         }
     ]
 }
